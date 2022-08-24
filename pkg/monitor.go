@@ -8,22 +8,29 @@ import (
 	"go.uber.org/zap"
 )
 
+type NetworkConfig struct {
+	Name string `yaml:"name"`
+}
+
 type Config struct {
-	Relays []string    `yaml:"relays"`
-	Api    *api.Config `yaml:"api"`
+	Network *NetworkConfig `yaml:"network"`
+	Relays  []string       `yaml:"relays"`
+	Api     *api.Config    `yaml:"api"`
 }
 
 type Monitor struct {
-	relays    []string
-	apiServer *api.Server
-	logger    *zap.Logger
+	relays        []string
+	apiServer     *api.Server
+	logger        *zap.Logger
+	networkConfig *NetworkConfig
 }
 
 func New(config *Config, logger *zap.Logger) *Monitor {
 	return &Monitor{
-		relays:    config.Relays,
-		apiServer: api.New(config.Api, logger),
-		logger:    logger,
+		relays:        config.Relays,
+		apiServer:     api.New(config.Api, logger),
+		logger:        logger,
+		networkConfig: config.Network,
 	}
 }
 
@@ -31,7 +38,7 @@ func (s *Monitor) watchRelays(wg *sync.WaitGroup) {
 	logger := s.logger.Sugar()
 	for {
 		for _, relay := range s.relays {
-			logger.Infow("watching relay", "endpoint", relay)
+			logger.Debugw("watching relay", "endpoint", relay)
 		}
 
 		time.Sleep(3 * time.Second)
@@ -44,6 +51,10 @@ func (s *Monitor) serveApi(wg *sync.WaitGroup) error {
 }
 
 func (s *Monitor) Run() {
+	logger := s.logger.Sugar()
+
+	logger.Infow("starting relay monitor", "network", s.networkConfig.Name, "relays", s.relays)
+
 	var wg sync.WaitGroup
 
 	// TODO error graph
