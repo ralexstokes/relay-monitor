@@ -1,11 +1,11 @@
 package monitor
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/ralexstokes/relay-monitor/pkg/api"
+	"go.uber.org/zap"
 )
 
 type Config struct {
@@ -16,19 +16,22 @@ type Config struct {
 type Monitor struct {
 	relays    []string
 	apiServer *api.Server
+	logger    *zap.Logger
 }
 
-func New(config *Config) *Monitor {
+func New(config *Config, logger *zap.Logger) *Monitor {
 	return &Monitor{
 		relays:    config.Relays,
-		apiServer: api.New(config.Api),
+		apiServer: api.New(config.Api, logger),
+		logger:    logger,
 	}
 }
 
 func (s *Monitor) watchRelays(wg *sync.WaitGroup) {
+	logger := s.logger.Sugar()
 	for {
 		for _, relay := range s.relays {
-			fmt.Printf("watching %s\n", relay)
+			logger.Infow("watching relay", "endpoint", relay)
 		}
 
 		time.Sleep(3 * time.Second)
