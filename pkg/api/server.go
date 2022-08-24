@@ -1,7 +1,8 @@
 package api
 
 import (
-	"sync"
+	"fmt"
+	"net/http"
 
 	"go.uber.org/zap"
 )
@@ -23,11 +24,9 @@ func New(config *Config, logger *zap.Logger) *Server {
 	}
 }
 
-func (s *Server) Run(wg *sync.WaitGroup) error {
-	stop := make(chan struct{})
+func (s *Server) Run(mux *http.ServeMux) error {
 	logger := s.logger.Sugar()
-	logger.Infof("API server listening on %s:%d", s.config.Host, s.config.Port)
-	<-stop
-	wg.Done()
-	return nil
+	host := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
+	logger.Infof("API server listening on %s", host)
+	return http.ListenAndServe(host, mux)
 }
