@@ -100,12 +100,12 @@ func (s *Monitor) monitorRelay(relay *builder.Client, wg *sync.WaitGroup) {
 		bid, err := relay.GetBid(slot, parentHash, *publicKey)
 		if err != nil {
 			logger.Warnw("could not get bid from relay", "error", err, "relayPublicKey", relayID, "slot", slot, "parentHash", parentHash, "proposer", publicKey)
-		} else {
+		} else if bid != nil {
 			s.relayMetricsLock.Lock()
 			metrics := s.relayMetrics[relayID]
 			metrics.Bids += 1
 			s.relayMetricsLock.Unlock()
-			logger.Debugf("got bid: %v", bid)
+			logger.Debugw("got bid", "value", bid.Message.Value, "header", bid.Message.Header, "publicKey", bid.Message.Pubkey, "id", relayID)
 		}
 	}
 	wg.Done()

@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"time"
 
+	go_boost_types "github.com/flashbots/go-boost-utils/types"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 )
 
@@ -70,11 +71,15 @@ func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode == http.StatusNoContent {
+		return nil, nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get bid with HTTP status code %d", resp.StatusCode)
 	}
 
-	var bid types.Bid
+	var bid go_boost_types.GetHeaderResponse
+	defer resp.Body.Close()
 	err = json.NewDecoder(resp.Body).Decode(&bid)
-	return &bid, err
+	return bid.Data, err
 }
