@@ -4,6 +4,8 @@ network:
   genesis_time: 1655733600
   slots_per_second: 12
   slots_per_epoch: 32
+consensus:
+  endpoint: "http://127.0.0.1:5052"
 relays:
   - "https://0x845bd072b7cd566f02faeb0a4033ce9399e42839ced64e8b2adcfc859ed1e8e1a5a293336a49feac6d9a5edb779be53a@builder-relay-sepolia.flashbots.net"
 api:

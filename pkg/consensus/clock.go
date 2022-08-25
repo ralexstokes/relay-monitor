@@ -44,3 +44,21 @@ func (c *Clock) TickSlots() chan types.Slot {
 	}()
 	return ch
 }
+
+func (c *Clock) TickEpochs() chan types.Epoch {
+	ch := make(chan types.Epoch, 1)
+	go func() {
+		slots := c.TickSlots()
+		currentSlot := <-slots
+		currentEpoch := currentSlot / c.slotsPerEpoch
+		ch <- currentEpoch
+		for slot := range c.TickSlots() {
+			epoch := slot / c.slotsPerEpoch
+			if epoch > currentEpoch {
+				currentEpoch = epoch
+				ch <- currentEpoch
+			}
+		}
+	}()
+	return ch
+}

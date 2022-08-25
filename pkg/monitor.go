@@ -18,10 +18,15 @@ type NetworkConfig struct {
 	SlotsPerEpoch  uint64 `yaml:"slots_per_epoch"`
 }
 
+type ConsensusConfig struct {
+	Endpoint string `yaml:"endpoint"`
+}
+
 type Config struct {
-	Network *NetworkConfig `yaml:"network"`
-	Relays  []string       `yaml:"relays"`
-	Api     *api.Config    `yaml:"api"`
+	Network   *NetworkConfig   `yaml:"network"`
+	Consensus *ConsensusConfig `yaml:"consensus"`
+	Relays    []string         `yaml:"relays"`
+	Api       *api.Config      `yaml:"api"`
 }
 
 type RelayMetrics struct {
@@ -63,14 +68,15 @@ func New(config *Config, zapLogger *zap.Logger) *Monitor {
 		relayMetrics[relay.ID()] = &RelayMetrics{}
 	}
 
+	clock := consensus.NewClock(config.Network.GenesisTime, config.Network.SlotsPerSecond, config.Network.SlotsPerEpoch)
 	return &Monitor{
 		relays:          relays,
 		apiServer:       api.New(config.Api, zapLogger),
 		logger:          zapLogger,
 		networkConfig:   config.Network,
 		relayMetrics:    relayMetrics,
-		clock:           consensus.NewClock(config.Network.GenesisTime, config.Network.SlotsPerSecond, config.Network.SlotsPerEpoch),
-		consensusClient: consensus.NewClient(""),
+		clock:           clock,
+		consensusClient: consensus.NewClient(config.Consensus.Endpoint, clock, zapLogger),
 	}
 }
 
@@ -81,11 +87,19 @@ func (s *Monitor) monitorRelay(relay *builder.Client, wg *sync.WaitGroup) {
 	logger.Infof("monitoring relay %s", relayID)
 
 	for slot := range s.clock.TickSlots() {
-		parentHash := s.consensusClient.GetParentHash(slot)
-		publicKey := s.consensusClient.GetProposerPublicKey(slot)
-		bid, err := relay.GetBid(slot, parentHash, publicKey)
+		parentHash, err := s.consensusClient.GetParentHash(slot)
 		if err != nil {
-			logger.Warnw("could not get bid from relay", "publicKey", relayID, "slot", slot, "parentHash", parentHash, "proposer", publicKey)
+			logger.Warnw("error fetching bid", "error", err)
+			continue
+		}
+		publicKey, err := s.consensusClient.GetProposerPublicKey(slot)
+		if err != nil {
+			logger.Warnw("error fetching bid", "error", err)
+			continue
+		}
+		bid, err := relay.GetBid(slot, parentHash, *publicKey)
+		if err != nil {
+			logger.Warnw("could not get bid from relay", "error", err, "relayPublicKey", relayID, "slot", slot, "parentHash", parentHash, "proposer", publicKey)
 		} else {
 			s.relayMetricsLock.Lock()
 			metrics := s.relayMetrics[relayID]
@@ -131,6 +145,11 @@ func (s *Monitor) Run() {
 	// TODO error graph
 
 	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go s.consensusClient.Run(&wg)
+	wg.Wait()
+
 	wg.Add(1)
 	go s.monitorRelays(&wg)
 
