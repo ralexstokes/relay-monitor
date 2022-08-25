@@ -4,19 +4,36 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 )
 
 type Client struct {
 	endpoint string
+	identity string
 	client   http.Client
 }
 
-func New(endpoint string) *Client {
+func (c *Client) String() string {
+	return c.ID()
+}
+
+func (c *Client) ID() string {
+	return c.identity
+}
+
+func NewClient(endpoint string) (*Client, error) {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	publicKey := u.User.Username()
 	return &Client{
 		endpoint: endpoint,
-	}
+		identity: publicKey,
+	}, nil
 }
 
 // `status` endpoint in the Builder API

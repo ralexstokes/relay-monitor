@@ -1,7 +1,6 @@
 package builder_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
@@ -13,18 +12,26 @@ const (
 )
 
 func TestClientStatus(t *testing.T) {
-	c := builder.New(exampleRelayURL)
-	err := c.GetStatus()
+	c, err := builder.NewClient(exampleRelayURL)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = c.GetStatus()
 	if err != nil {
 		t.Error(err)
 	}
 }
 
 func TestClientBid(t *testing.T) {
-	c := builder.New(exampleRelayURL)
-	bid, err := c.GetBid(100, types.Hash{}, types.PublicKey{})
+	c, err := builder.NewClient(exampleRelayURL)
 	if err != nil {
 		t.Error(err)
 	}
-	fmt.Println(bid)
+
+	_, err = c.GetBid(100, types.Hash{}, types.PublicKey{})
+	if err != nil {
+		t.Error(err)
+	}
+
 }
