@@ -34,7 +34,7 @@ type Monitor struct {
 	logger        *zap.Logger
 	networkConfig *NetworkConfig
 
-	relayMetrics     map[string]*RelayMetrics `json:"relay_metrics"`
+	relayMetrics     map[string]*RelayMetrics
 	relayMetricsLock sync.Mutex
 
 	clock           *consensus.Clock
@@ -85,7 +85,7 @@ func (s *Monitor) monitorRelay(relay *builder.Client, wg *sync.WaitGroup) {
 		publicKey := s.consensusClient.GetProposerPublicKey(slot)
 		bid, err := relay.GetBid(slot, parentHash, publicKey)
 		if err != nil {
-			logger.Warnf("could not get bid from relay %s", relay)
+			logger.Warnw("could not get bid from relay", "publicKey", relayID, "slot", slot, "parentHash", parentHash, "proposer", publicKey)
 		} else {
 			s.relayMetricsLock.Lock()
 			metrics := s.relayMetrics[relayID]

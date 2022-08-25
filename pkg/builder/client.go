@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 )
@@ -30,9 +31,14 @@ func NewClient(endpoint string) (*Client, error) {
 	}
 
 	publicKey := u.User.Username()
+
+	client := http.Client{
+		Timeout: 2 * time.Second,
+	}
 	return &Client{
 		endpoint: endpoint,
 		identity: publicKey,
+		client:   client,
 	}, nil
 }
 
