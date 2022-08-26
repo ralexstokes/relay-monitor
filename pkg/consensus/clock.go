@@ -21,7 +21,7 @@ func NewClock(genesisTime uint64, slotsPerSecond uint64, slotsPerEpoch uint64) *
 }
 
 func (c *Clock) slotInSeconds(slot types.Slot) int64 {
-	return int64(slot*uint64(c.slotsPerSecond) + c.genesisTime)
+	return int64(slot*c.slotsPerSecond + c.genesisTime)
 }
 
 func (c *Clock) currentSlot(currentTime int64) types.Slot {

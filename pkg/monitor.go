@@ -49,7 +49,7 @@ type Monitor struct {
 func New(config *Config, zapLogger *zap.Logger) *Monitor {
 	logger := zapLogger.Sugar()
 
-	relays := []*builder.Client{}
+	var relays []*builder.Client
 	relayMetrics := make(map[string]*RelayMetrics)
 	for _, endpoint := range config.Relays {
 		relay, err := builder.NewClient(endpoint)
@@ -128,7 +128,11 @@ func (s *Monitor) handleRelayMetricsRequest(w http.ResponseWriter, r *http.Reque
 	s.relayMetricsLock.Lock()
 	defer s.relayMetricsLock.Unlock()
 
-	encoder.Encode(s.relayMetrics)
+	logger := s.logger.Sugar()
+	err := encoder.Encode(s.relayMetrics)
+	if err != nil {
+		logger.Errorw("could not encode relay metrics", "error", err)
+	}
 }
 
 func (s *Monitor) serveApi() error {
@@ -153,7 +157,12 @@ func (s *Monitor) Run() {
 	wg.Add(1)
 	go s.monitorRelays(&wg)
 
-	go s.serveApi()
+	go func() {
+		err := s.serveApi()
+		if err != nil {
+			logger.Errorw("error serving api", "error", err)
+		}
+	}()
 
 	wg.Wait()
 }

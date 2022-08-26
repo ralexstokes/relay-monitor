@@ -40,6 +40,6 @@ func main() {
 		logger.Fatalf("could not load config: %s", err)
 	}
 
-	monitor := monitor.New(config, zapLogger)
-	monitor.Run()
+	m := monitor.New(config, zapLogger)
+	m.Run()
 }

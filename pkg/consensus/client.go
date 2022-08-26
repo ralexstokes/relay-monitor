@@ -123,7 +123,7 @@ func (c *Client) streamHeads() <-chan types.Coordinate {
 	sseClient := sse.NewClient(c.client.Addr + "/eth/v1/events?topics=head")
 	ch := make(chan types.Coordinate, 1)
 	go func() {
-		sseClient.SubscribeRaw(func(msg *sse.Event) {
+		err := sseClient.SubscribeRaw(func(msg *sse.Event) {
 			var event headEvent
 			err := json.Unmarshal(msg.Data, &event)
 			if err != nil {
@@ -141,6 +141,9 @@ func (c *Client) streamHeads() <-chan types.Coordinate {
 			}
 			ch <- coordinate
 		})
+		if err != nil {
+			logger.Errorw("could not subscribe to head event", "error", err)
+		}
 	}()
 	return ch
 }
