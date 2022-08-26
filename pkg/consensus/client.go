@@ -19,6 +19,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const clientTimeoutSec = 5
+
 type ValidatorInfo struct {
 	publicKey types.PublicKey
 	index     types.ValidatorIndex
@@ -30,10 +32,10 @@ type Client struct {
 	clock  *Clock
 
 	proposerCache      map[types.Slot]ValidatorInfo
-	proposerCacheMutex sync.Mutex
+	proposerCacheMutex sync.RWMutex
 
 	executionCache      map[types.Slot]types.Hash
-	executionCacheMutex sync.Mutex
+	executionCacheMutex sync.RWMutex
 }
 
 func NewClient(endpoint string, clock *Clock, logger *zap.Logger) *Client {
@@ -43,7 +45,7 @@ func NewClient(endpoint string, clock *Clock, logger *zap.Logger) *Client {
 			Transport: &http.Transport{
 				MaxIdleConnsPerHost: 128,
 			},
-			Timeout: 5 * time.Second,
+			Timeout: clientTimeoutSec * time.Second,
 		},
 		Codec: eth2api.JSONCodec{},
 	}
@@ -58,9 +60,9 @@ func NewClient(endpoint string, clock *Clock, logger *zap.Logger) *Client {
 
 func (c *Client) GetParentHash(slot types.Slot) (types.Hash, error) {
 	targetSlot := slot - 1
-	c.executionCacheMutex.Lock()
+	c.executionCacheMutex.RLock()
 	parentHash, ok := c.executionCache[targetSlot]
-	c.executionCacheMutex.Unlock()
+	c.executionCacheMutex.RUnlock()
 	if !ok {
 		return c.fetchExecutionHash(targetSlot)
 	}
@@ -68,8 +70,8 @@ func (c *Client) GetParentHash(slot types.Slot) (types.Hash, error) {
 }
 
 func (c *Client) GetProposerPublicKey(slot types.Slot) (*types.PublicKey, error) {
-	c.proposerCacheMutex.Lock()
-	defer c.proposerCacheMutex.Unlock()
+	c.proposerCacheMutex.RLock()
+	defer c.proposerCacheMutex.RUnlock()
 
 	validator, ok := c.proposerCache[slot]
 	if !ok {
@@ -127,12 +129,12 @@ func (c *Client) streamHeads() <-chan types.Coordinate {
 			var event headEvent
 			err := json.Unmarshal(msg.Data, &event)
 			if err != nil {
-				logger.Warnf("could not unmarshal `head` node event: %s", err)
+				logger.Warnf("could not unmarshal `head` node event: %v", err)
 				return
 			}
 			slot, err := strconv.Atoi(event.Slot)
 			if err != nil {
-				logger.Warnf("could not unmarshal slot from `head` node event: %s", err)
+				logger.Warnf("could not unmarshal slot from `head` node event: %v", err)
 				return
 			}
 			head := types.Coordinate{
@@ -159,9 +161,9 @@ func (c *Client) fetchExecutionHash(slot types.Slot) (types.Hash, error) {
 		// assume missing slot, use execution hash from previous slot(s)
 		for i := slot; i > 0; i-- {
 			targetSlot := i - 1
-			c.executionCacheMutex.Lock()
+			c.executionCacheMutex.RLock()
 			executionHash, ok := c.executionCache[targetSlot]
-			c.executionCacheMutex.Unlock()
+			c.executionCacheMutex.RUnlock()
 			if !ok {
 				continue
 			}
@@ -194,13 +196,13 @@ func (c *Client) runSlotTasks(wg *sync.WaitGroup) {
 	currentSlot := c.clock.currentSlot(now)
 	_, err := c.fetchExecutionHash(currentSlot - 1)
 	if err != nil {
-		logger.Warnf("could not fetch latest execution hash for slot %d: %s", currentSlot, err)
+		logger.Warnf("could not fetch latest execution hash for slot %d: %v", currentSlot, err)
 	}
 
 	// load data for the current slot
 	_, err = c.fetchExecutionHash(currentSlot)
 	if err != nil {
-		logger.Warnf("could not fetch latest execution hash for slot %d: %s", currentSlot, err)
+		logger.Warnf("could not fetch latest execution hash for slot %d: %v", currentSlot, err)
 	}
 	// done with init...
 	wg.Done()
@@ -208,7 +210,7 @@ func (c *Client) runSlotTasks(wg *sync.WaitGroup) {
 	for head := range c.streamHeads() {
 		_, err := c.fetchExecutionHash(head.Slot)
 		if err != nil {
-			logger.Warnf("could not fetch latest execution hash for slot %d: %s", head.Slot, err)
+			logger.Warnf("could not fetch latest execution hash for slot %d: %v", head.Slot, err)
 		}
 	}
 }
@@ -222,13 +224,13 @@ func (c *Client) runEpochTasks(wg *sync.WaitGroup) {
 	epoch := <-epochs
 	err := c.loadData(epoch)
 	if err != nil {
-		logger.Warnf("could not load consensus state for epoch %d: %s", epoch, err)
+		logger.Warnf("could not load consensus state for epoch %d: %v", epoch, err)
 	}
 
 	// load data for the next epoch, as we will typically do
 	err = c.loadData(epoch + 1)
 	if err != nil {
-		logger.Warnf("could not load consensus state for epoch %d: %s", epoch, err)
+		logger.Warnf("could not load consensus state for epoch %d: %v", epoch, err)
 	}
 	// signal to caller that we have done the initialization...
 	wg.Done()
@@ -236,7 +238,7 @@ func (c *Client) runEpochTasks(wg *sync.WaitGroup) {
 	for epoch := range epochs {
 		err := c.loadData(epoch + 1)
 		if err != nil {
-			logger.Warnf("could not load consensus state for epoch %d: %s", epoch, err)
+			logger.Warnf("could not load consensus state for epoch %d: %v", epoch, err)
 		}
 	}
 }

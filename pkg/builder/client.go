@@ -11,6 +11,8 @@ import (
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 )
 
+const clientTimeoutSec = 2
+
 type Client struct {
 	endpoint string
 	identity string
@@ -34,7 +36,7 @@ func NewClient(endpoint string) (*Client, error) {
 	publicKey := u.User.Username()
 
 	client := http.Client{
-		Timeout: 2 * time.Second,
+		Timeout: clientTimeoutSec * time.Second,
 	}
 	return &Client{
 		endpoint: endpoint,
@@ -51,9 +53,15 @@ func (c *Client) GetStatus() error {
 		return err
 	}
 	resp, err := c.client.Do(req)
+	defer func() {
+		if err = resp.Body.Close(); err != nil {
+			return
+		}
+	}()
 	if err != nil {
 		return err
 	}
+
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("relay status was not healthy with HTTP status code %d", resp.StatusCode)
 	}

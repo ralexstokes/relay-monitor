@@ -54,13 +54,13 @@ func New(config *Config, zapLogger *zap.Logger) *Monitor {
 	for _, endpoint := range config.Relays {
 		relay, err := builder.NewClient(endpoint)
 		if err != nil {
-			logger.Warnf("could not instantiate relay at %s: %s", endpoint, err)
+			logger.Warnf("could not instantiate relay at %s: %v", endpoint, err)
 			continue
 		}
 
 		err = relay.GetStatus()
 		if err != nil {
-			logger.Warnf("relay %s has status error: %s", endpoint, err)
+			logger.Warnf("relay %s has status error: %v", endpoint, err)
 			continue
 		}
 
