@@ -156,6 +156,17 @@ func (c *Client) fetchExecutionHash(slot types.Slot) (types.Hash, error) {
 	var signedBeaconBlock eth2api.VersionedSignedBeaconBlock
 	exists, err := beaconapi.BlockV2(ctx, c.client, blockID, &signedBeaconBlock)
 	if !exists {
+		// assume missing slot, use execution hash from previous slot(s)
+		for i := slot; i > 0; i-- {
+			targetSlot := i - 1
+			c.executionCacheMutex.Lock()
+			executionHash, ok := c.executionCache[targetSlot]
+			c.executionCacheMutex.Unlock()
+			if !ok {
+				continue
+			}
+			return executionHash, nil
+		}
 		return types.Hash{}, fmt.Errorf("block at slot %d is missing", slot)
 	} else if err != nil {
 		return types.Hash{}, err
