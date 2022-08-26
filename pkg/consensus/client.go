@@ -148,23 +148,19 @@ func (c *Client) streamHeads() <-chan types.Coordinate {
 	return ch
 }
 
-func (c *Client) fetchLatestExecutionHash(head *types.Coordinate) error {
+func (c *Client) fetchExecutionHash(slot types.Slot) error {
 	ctx := context.Background()
 
-	blockID, err := eth2api.ParseBlockId(head.Root.String())
-	if err != nil {
-		return fmt.Errorf("could not parse block for head %v", head)
-	}
+	blockID := eth2api.BlockIdSlot(slot)
 
 	var signedBeaconBlock eth2api.VersionedSignedBeaconBlock
 	exists, err := beaconapi.BlockV2(ctx, c.client, blockID, &signedBeaconBlock)
 	if !exists {
-		return fmt.Errorf("block with root %s is missing", head.Root)
+		return fmt.Errorf("block at slot %d is missing", slot)
 	} else if err != nil {
 		return err
 	}
 
-	slot := head.Slot
 	bellatrixBlock, ok := signedBeaconBlock.Data.(*bellatrix.SignedBeaconBlock)
 	if !ok {
 		return fmt.Errorf("could not parse block %s", signedBeaconBlock)
@@ -181,12 +177,22 @@ func (c *Client) fetchLatestExecutionHash(head *types.Coordinate) error {
 
 func (c *Client) runSlotTasks(wg *sync.WaitGroup) {
 	logger := c.logger.Sugar()
+	now := time.Now().Unix()
+	currentSlot := c.clock.currentSlot(now)
+	err := c.fetchExecutionHash(currentSlot - 1)
+	if err != nil {
+		logger.Warnf("could not fetch latest execution hash for slot %d: %s", currentSlot, err)
+	}
+	err = c.fetchExecutionHash(currentSlot)
+	if err != nil {
+		logger.Warnf("could not fetch latest execution hash for slot %d: %s", currentSlot, err)
+	}
 	wg.Done()
 
 	for head := range c.streamHeads() {
-		err := c.fetchLatestExecutionHash(&head)
+		err := c.fetchExecutionHash(head.Slot)
 		if err != nil {
-			logger.Warnf("could not load consensus state for slot %d: %s", head.Slot, err)
+			logger.Warnf("could not fetch latest execution hash for slot %d: %s", head.Slot, err)
 		}
 	}
 }
