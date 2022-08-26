@@ -43,10 +43,10 @@ func NewClient(endpoint string) (*Client, error) {
 	}, nil
 }
 
-// `status` endpoint in the Builder API
+// GetStatus implements the `status` endpoint in the Builder API
 func (c *Client) GetStatus() error {
-	url := c.endpoint + "/eth/v1/builder/status"
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	statusUrl := c.endpoint + "/eth/v1/builder/status"
+	req, err := http.NewRequest(http.MethodGet, statusUrl, nil)
 	if err != nil {
 		return err
 	}
@@ -60,10 +60,10 @@ func (c *Client) GetStatus() error {
 	return nil
 }
 
-// `getHeader` endpoint in the Builder API
+// GetBid implements the `getHeader` endpoint in the Builder API
 func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.PublicKey) (*types.Bid, error) {
-	url := c.endpoint + fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot, parentHash, publicKey)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	bidUrl := c.endpoint + fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot, parentHash, publicKey)
+	req, err := http.NewRequest(http.MethodGet, bidUrl, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,11 @@ func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.
 	}
 
 	var bid go_boost_types.GetHeaderResponse
-	defer resp.Body.Close()
+	defer func() {
+		if err = resp.Body.Close(); err != nil {
+			return
+		}
+	}()
 	err = json.NewDecoder(resp.Body).Decode(&bid)
 	return bid.Data, err
 }
