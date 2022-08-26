@@ -26,6 +26,10 @@ func (c *Clock) slotInSeconds(slot types.Slot) int64 {
 
 func (c *Clock) currentSlot(currentTime int64) types.Slot {
 	diff := currentTime - int64(c.genesisTime)
+	// TODO better handling of pre-genesis
+	if diff < 0 {
+		return 0
+	}
 	return types.Slot(diff / int64(c.slotsPerSecond))
 }
 
