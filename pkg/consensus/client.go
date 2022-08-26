@@ -135,11 +135,11 @@ func (c *Client) streamHeads() <-chan types.Coordinate {
 				logger.Warnf("could not unmarshal slot from `head` node event: %s", err)
 				return
 			}
-			coordinate := types.Coordinate{
+			head := types.Coordinate{
 				Slot: types.Slot(slot),
 				Root: event.Block,
 			}
-			ch <- coordinate
+			ch <- head
 		})
 		if err != nil {
 			logger.Errorw("could not subscribe to head event", "error", err)
