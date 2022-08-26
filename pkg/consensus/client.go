@@ -57,12 +57,12 @@ func NewClient(endpoint string, clock *Clock, logger *zap.Logger) *Client {
 }
 
 func (c *Client) GetParentHash(slot types.Slot) (types.Hash, error) {
+	targetSlot := slot - 1
 	c.executionCacheMutex.Lock()
-	parentHash, ok := c.executionCache[slot-1]
+	parentHash, ok := c.executionCache[targetSlot]
 	c.executionCacheMutex.Unlock()
 	if !ok {
-		// TODO fetch hash when missing
-		return types.Hash{}, fmt.Errorf("missing execution hash for slot %d", slot)
+		return c.fetchExecutionHash(targetSlot)
 	}
 	return parentHash, nil
 }
@@ -148,7 +148,7 @@ func (c *Client) streamHeads() <-chan types.Coordinate {
 	return ch
 }
 
-func (c *Client) fetchExecutionHash(slot types.Slot) error {
+func (c *Client) fetchExecutionHash(slot types.Slot) (types.Hash, error) {
 	ctx := context.Background()
 
 	blockID := eth2api.BlockIdSlot(slot)
@@ -156,41 +156,46 @@ func (c *Client) fetchExecutionHash(slot types.Slot) error {
 	var signedBeaconBlock eth2api.VersionedSignedBeaconBlock
 	exists, err := beaconapi.BlockV2(ctx, c.client, blockID, &signedBeaconBlock)
 	if !exists {
-		return fmt.Errorf("block at slot %d is missing", slot)
+		return types.Hash{}, fmt.Errorf("block at slot %d is missing", slot)
 	} else if err != nil {
-		return err
+		return types.Hash{}, err
 	}
 
 	bellatrixBlock, ok := signedBeaconBlock.Data.(*bellatrix.SignedBeaconBlock)
 	if !ok {
-		return fmt.Errorf("could not parse block %s", signedBeaconBlock)
+		return types.Hash{}, fmt.Errorf("could not parse block %s", signedBeaconBlock)
 	}
-	executionHash := bellatrixBlock.Message.Body.ExecutionPayload.BlockHash
+	executionHash := types.Hash(bellatrixBlock.Message.Body.ExecutionPayload.BlockHash)
 
 	// TODO handle reorgs, etc.
 	c.executionCacheMutex.Lock()
-	c.executionCache[slot] = types.Hash(executionHash)
+	c.executionCache[slot] = executionHash
 	c.executionCacheMutex.Unlock()
 
-	return nil
+	return executionHash, nil
 }
 
 func (c *Client) runSlotTasks(wg *sync.WaitGroup) {
 	logger := c.logger.Sugar()
+
+	// load data for the previous slot
 	now := time.Now().Unix()
 	currentSlot := c.clock.currentSlot(now)
-	err := c.fetchExecutionHash(currentSlot - 1)
+	_, err := c.fetchExecutionHash(currentSlot - 1)
 	if err != nil {
 		logger.Warnf("could not fetch latest execution hash for slot %d: %s", currentSlot, err)
 	}
-	err = c.fetchExecutionHash(currentSlot)
+
+	// load data for the current slot
+	_, err = c.fetchExecutionHash(currentSlot)
 	if err != nil {
 		logger.Warnf("could not fetch latest execution hash for slot %d: %s", currentSlot, err)
 	}
+	// done with init...
 	wg.Done()
 
 	for head := range c.streamHeads() {
-		err := c.fetchExecutionHash(head.Slot)
+		_, err := c.fetchExecutionHash(head.Slot)
 		if err != nil {
 			logger.Warnf("could not fetch latest execution hash for slot %d: %s", head.Slot, err)
 		}
