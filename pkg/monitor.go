@@ -131,7 +131,7 @@ func (s *Monitor) handleRelayMetricsRequest(w http.ResponseWriter, r *http.Reque
 	logger := s.logger.Sugar()
 	err := encoder.Encode(s.relayMetrics)
 	if err != nil {
-		logger.Warnw("could not encode relay metrics", "error", err)
+		logger.Errorw("could not encode relay metrics", "error", err)
 	}
 }
 
