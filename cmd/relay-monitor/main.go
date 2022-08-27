@@ -23,7 +23,7 @@ func main() {
 
 	zapLogger, err := loggingConfig.Build()
 	if err != nil {
-		log.Fatalf("could not open log file")
+		log.Fatalf("could not open log file: %v", err)
 	}
 	defer zapLogger.Sync()
 
@@ -31,13 +31,13 @@ func main() {
 
 	data, err := os.ReadFile(*configFile)
 	if err != nil {
-		logger.Fatalf("could not read config file: %s", err)
+		logger.Fatalf("could not read config file: %v", err)
 	}
 
 	config := &monitor.Config{}
 	err = yaml.Unmarshal(data, config)
 	if err != nil {
-		logger.Fatalf("could not load config: %s", err)
+		logger.Fatalf("could not load config: %v", err)
 	}
 
 	m := monitor.New(config, zapLogger)
