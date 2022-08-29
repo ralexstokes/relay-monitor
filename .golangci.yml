@@ -1,0 +1,23 @@
+run:
+  skip-files:
+    - .*_test.go
+  timeout: 10m
+  go: '1.189
+
+linters:
+  disable-all: true
+  enable:
+    - gofmt
+    - goimports
+    - deadcode
+    - errcheck
+    - gosimple
+    - gocognit
+
+linters-settings:
+  gocognit:
+    min-complexity: 65
+
+output:
+  print-issued-lines: true
+  sort-results: true
