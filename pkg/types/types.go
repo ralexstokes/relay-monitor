@@ -2,10 +2,8 @@ package types
 
 import (
 	"github.com/flashbots/go-boost-utils/types"
+	primitives "github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
 )
-
-type Slot = uint64
-type Epoch = uint64
 
 type PublicKey = types.PublicKey
 
@@ -18,6 +16,6 @@ type Root = types.Root
 type ValidatorIndex = uint64
 
 type Coordinate struct {
-	Slot Slot
+	Slot primitives.Slot
 	Root Root
 }

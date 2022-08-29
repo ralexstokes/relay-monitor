@@ -1,12 +1,16 @@
 package monitor
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"sync"
+	"time"
 
+	"github.com/prysmaticlabs/prysm/v3/api/client/builder"
+	"github.com/prysmaticlabs/prysm/v3/testing/endtoend/helpers"
+	"github.com/prysmaticlabs/prysm/v3/time/slots"
 	"github.com/ralexstokes/relay-monitor/pkg/api"
-	"github.com/ralexstokes/relay-monitor/pkg/builder"
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
 	"go.uber.org/zap"
 )
@@ -42,7 +46,7 @@ type Monitor struct {
 	relayMetrics     map[string]*RelayMetrics
 	relayMetricsLock sync.Mutex
 
-	clock           *consensus.Clock
+	clock           *slots.SlotTicker
 	consensusClient *consensus.Client
 }
 
@@ -58,35 +62,38 @@ func New(config *Config, zapLogger *zap.Logger) *Monitor {
 			continue
 		}
 
-		err = relay.GetStatus()
+		err = relay.Status(context.TODO())
 		if err != nil {
 			logger.Warnf("relay %s has status error: %v", endpoint, err)
 			continue
 		}
 
 		relays = append(relays, relay)
-		relayMetrics[relay.ID()] = &RelayMetrics{}
+		relayMetrics[relay.NodeURL()] = &RelayMetrics{}
 	}
 
-	clock := consensus.NewClock(config.Network.GenesisTime, config.Network.SlotsPerSecond, config.Network.SlotsPerEpoch)
+	genesisTime := time.Unix(int64(config.Network.GenesisTime), 0)
+	slotsTicker := slots.NewSlotTicker(genesisTime, config.Network.SlotsPerEpoch)
+	epochTicker := helpers.NewEpochTicker(genesisTime, config.Network.SlotsPerSecond*config.Network.SlotsPerEpoch)
+
 	return &Monitor{
 		relays:          relays,
 		apiServer:       api.New(config.Api, zapLogger),
 		logger:          zapLogger,
 		networkConfig:   config.Network,
 		relayMetrics:    relayMetrics,
-		clock:           clock,
-		consensusClient: consensus.NewClient(config.Consensus.Endpoint, clock, zapLogger),
+		clock:           slotsTicker,
+		consensusClient: consensus.NewClient(config.Consensus.Endpoint, slotsTicker, epochTicker, genesisTime, zapLogger),
 	}
 }
 
 func (s *Monitor) monitorRelay(relay *builder.Client, wg *sync.WaitGroup) {
 	logger := s.logger.Sugar()
 
-	relayID := relay.ID()
+	relayID := relay.NodeURL()
 	logger.Infof("monitoring relay %s", relayID)
 
-	for slot := range s.clock.TickSlots() {
+	for slot := range s.clock.C() {
 		parentHash, err := s.consensusClient.GetParentHash(slot)
 		if err != nil {
 			logger.Warnw("error fetching bid", "error", err)
@@ -97,7 +104,7 @@ func (s *Monitor) monitorRelay(relay *builder.Client, wg *sync.WaitGroup) {
 			logger.Warnw("error fetching bid", "error", err)
 			continue
 		}
-		bid, err := relay.GetBid(slot, parentHash, *publicKey)
+		bid, err := relay.GetHeader(context.TODO(), slot, parentHash, *publicKey)
 		if err != nil {
 			logger.Warnw("could not get bid from relay", "error", err, "relayPublicKey", relayID, "slot", slot, "parentHash", parentHash, "proposer", publicKey)
 		} else if bid != nil {
