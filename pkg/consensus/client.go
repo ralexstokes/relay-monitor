@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/protolambda/eth2api"
 	"github.com/protolambda/eth2api/client/beaconapi"
 	"github.com/protolambda/eth2api/client/validatorapi"
@@ -19,7 +20,10 @@ import (
 	"go.uber.org/zap"
 )
 
-const clientTimeoutSec = 5
+const (
+	clientTimeoutSec = 5
+	cacheSize        = 128
+)
 
 type ValidatorInfo struct {
 	publicKey types.PublicKey
@@ -31,14 +35,11 @@ type Client struct {
 	client *eth2api.Eth2HttpClient
 	clock  *Clock
 
-	proposerCache      map[types.Slot]ValidatorInfo
-	proposerCacheMutex sync.RWMutex
-
-	executionCache      map[types.Slot]types.Hash
-	executionCacheMutex sync.RWMutex
+	proposerCache  lru.Cache
+	executionCache lru.Cache
 }
 
-func NewClient(endpoint string, clock *Clock, logger *zap.Logger) *Client {
+func NewClient(endpoint string, clock *Clock, logger *zap.Logger) (*Client, error) {
 	client := &eth2api.Eth2HttpClient{
 		Addr: endpoint,
 		Cli: &http.Client{
@@ -49,36 +50,47 @@ func NewClient(endpoint string, clock *Clock, logger *zap.Logger) *Client {
 		},
 		Codec: eth2api.JSONCodec{},
 	}
+	proposerCache, err := lru.New(cacheSize)
+	if err != nil {
+		return &Client{}, err
+	}
+	executionHash, err := lru.New(cacheSize)
+	if err != nil {
+		return &Client{}, err
+	}
 	return &Client{
 		logger:         logger,
 		client:         client,
 		clock:          clock,
-		proposerCache:  make(map[types.Slot]ValidatorInfo),
-		executionCache: make(map[types.Slot]types.Hash),
-	}
+		proposerCache:  *proposerCache,
+		executionCache: *executionHash,
+	}, nil
 }
 
 func (c *Client) GetParentHash(slot types.Slot) (types.Hash, error) {
 	targetSlot := slot - 1
-	c.executionCacheMutex.RLock()
-	parentHash, ok := c.executionCache[targetSlot]
-	c.executionCacheMutex.RUnlock()
+	parentHash, ok := c.executionCache.Get(targetSlot)
 	if !ok {
 		return c.fetchExecutionHash(targetSlot)
 	}
-	return parentHash, nil
+	if hash, ok := parentHash.(types.Hash); ok {
+		return hash, nil
+	} else {
+		return types.Hash{}, fmt.Errorf("invalid value stored in cache")
+	}
 }
 
 func (c *Client) GetProposerPublicKey(slot types.Slot) (*types.PublicKey, error) {
-	c.proposerCacheMutex.RLock()
-	defer c.proposerCacheMutex.RUnlock()
-
-	validator, ok := c.proposerCache[slot]
+	validator, ok := c.proposerCache.Get(slot)
 	if !ok {
 		return nil, fmt.Errorf("missing proposal for slot %d", slot)
 	}
 
-	return &validator.publicKey, nil
+	if v, ok := validator.(ValidatorInfo); ok {
+		return &v.publicKey, nil
+	} else {
+		return &types.PublicKey{}, fmt.Errorf("invalid value stored in cache")
+	}
 }
 
 func (c *Client) fetchProposers(epoch types.Epoch) error {
@@ -93,14 +105,12 @@ func (c *Client) fetchProposers(epoch types.Epoch) error {
 	}
 
 	// TODO handle reorgs, etc.
-	c.proposerCacheMutex.Lock()
 	for _, duty := range proposerDuties.Data {
-		c.proposerCache[uint64(duty.Slot)] = ValidatorInfo{
+		c.proposerCache.Add(uint64(duty.Slot), ValidatorInfo{
 			publicKey: types.PublicKey(duty.Pubkey),
 			index:     uint64(duty.ValidatorIndex),
-		}
+		})
 	}
-	c.proposerCacheMutex.Unlock()
 
 	return nil
 }
@@ -161,13 +171,15 @@ func (c *Client) fetchExecutionHash(slot types.Slot) (types.Hash, error) {
 		// assume missing slot, use execution hash from previous slot(s)
 		for i := slot; i > 0; i-- {
 			targetSlot := i - 1
-			c.executionCacheMutex.RLock()
-			executionHash, ok := c.executionCache[targetSlot]
-			c.executionCacheMutex.RUnlock()
+			executionHash, ok := c.executionCache.Get(targetSlot)
 			if !ok {
 				continue
 			}
-			return executionHash, nil
+			if hash, ok := executionHash.(types.Hash); ok {
+				return hash, nil
+			} else {
+				return types.Hash{}, fmt.Errorf("invalid value stored in cache")
+			}
 		}
 		return types.Hash{}, fmt.Errorf("block at slot %d is missing", slot)
 	} else if err != nil {
@@ -181,9 +193,7 @@ func (c *Client) fetchExecutionHash(slot types.Slot) (types.Hash, error) {
 	executionHash := types.Hash(bellatrixBlock.Message.Body.ExecutionPayload.BlockHash)
 
 	// TODO handle reorgs, etc.
-	c.executionCacheMutex.Lock()
-	c.executionCache[slot] = executionHash
-	c.executionCacheMutex.Unlock()
+	c.executionCache.Add(slot, executionHash)
 
 	return executionHash, nil
 }

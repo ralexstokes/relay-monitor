@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -46,7 +47,7 @@ type Monitor struct {
 	consensusClient *consensus.Client
 }
 
-func New(config *Config, zapLogger *zap.Logger) *Monitor {
+func New(config *Config, zapLogger *zap.Logger) (*Monitor, error) {
 	logger := zapLogger.Sugar()
 
 	var relays []*builder.Client
@@ -69,6 +70,10 @@ func New(config *Config, zapLogger *zap.Logger) *Monitor {
 	}
 
 	clock := consensus.NewClock(config.Network.GenesisTime, config.Network.SlotsPerSecond, config.Network.SlotsPerEpoch)
+	client, err := consensus.NewClient(config.Consensus.Endpoint, clock, zapLogger)
+	if err != nil {
+		return &Monitor{}, fmt.Errorf("could not instantiate consensus client: %v", err)
+	}
 	return &Monitor{
 		relays:          relays,
 		apiServer:       api.New(config.Api, zapLogger),
@@ -76,8 +81,8 @@ func New(config *Config, zapLogger *zap.Logger) *Monitor {
 		networkConfig:   config.Network,
 		relayMetrics:    relayMetrics,
 		clock:           clock,
-		consensusClient: consensus.NewClient(config.Consensus.Endpoint, clock, zapLogger),
-	}
+		consensusClient: client,
+	}, nil
 }
 
 func (s *Monitor) monitorRelay(relay *builder.Client, wg *sync.WaitGroup) {

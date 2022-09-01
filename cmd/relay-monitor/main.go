@@ -11,9 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var (
-	configFile = flag.String("config", "config.example.yaml", "path to config file")
-)
+var configFile = flag.String("config", "config.example.yaml", "path to config file")
 
 func main() {
 	flag.Parse()
@@ -40,6 +38,9 @@ func main() {
 		logger.Fatalf("could not load config: %v", err)
 	}
 
-	m := monitor.New(config, zapLogger)
+	m, err := monitor.New(config, zapLogger)
+	if err != nil {
+		logger.Fatalf("could not start monitor: %v", err)
+	}
 	m.Run()
 }
