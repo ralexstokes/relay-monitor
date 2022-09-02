@@ -3,6 +3,7 @@ package consensus
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -24,6 +25,8 @@ const (
 	clientTimeoutSec = 5
 	cacheSize        = 128
 )
+
+var ErrInvalidCacheValue = errors.New("invalid value stored in cache")
 
 type ValidatorInfo struct {
 	publicKey types.PublicKey
@@ -76,7 +79,7 @@ func (c *Client) GetParentHash(slot types.Slot) (types.Hash, error) {
 	if hash, ok := parentHash.(types.Hash); ok {
 		return hash, nil
 	} else {
-		return types.Hash{}, fmt.Errorf("invalid value stored in cache")
+		return types.Hash{}, ErrInvalidCacheValue
 	}
 }
 
@@ -89,7 +92,7 @@ func (c *Client) GetProposerPublicKey(slot types.Slot) (*types.PublicKey, error)
 	if v, ok := validator.(ValidatorInfo); ok {
 		return &v.publicKey, nil
 	} else {
-		return &types.PublicKey{}, fmt.Errorf("invalid value stored in cache")
+		return &types.PublicKey{}, ErrInvalidCacheValue
 	}
 }
 
@@ -178,7 +181,7 @@ func (c *Client) fetchExecutionHash(slot types.Slot) (types.Hash, error) {
 			if hash, ok := executionHash.(types.Hash); ok {
 				return hash, nil
 			} else {
-				return types.Hash{}, fmt.Errorf("invalid value stored in cache")
+				return types.Hash{}, ErrInvalidCacheValue
 			}
 		}
 		return types.Hash{}, fmt.Errorf("block at slot %d is missing", slot)
