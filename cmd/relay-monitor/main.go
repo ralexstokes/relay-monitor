@@ -25,7 +25,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not open log file: %v", err)
 	}
-	defer zapLogger.Sync()
+	defer func() {
+		err := zapLogger.Sync()
+		if err != nil {
+			log.Fatalf("could not flush log: %v", err)
+		}
+	}()
 
 	logger := zapLogger.Sugar()
 
