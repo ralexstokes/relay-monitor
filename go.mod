@@ -61,3 +61,5 @@ require (
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
+
+replace github.com/uber/jaeger-client-go v2.30.0+incompatible => github.com/uber/jaeger-client-go v2.28.0+incompatible
