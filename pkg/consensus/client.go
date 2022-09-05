@@ -75,7 +75,7 @@ func (c *Client) GetProposerPublicKey(slot types.Slot) (*types.PublicKey, error)
 
 	validator, ok := c.proposerCache[slot]
 	if !ok {
-		return nil, fmt.Errorf("missing proposal for slot %d", slot)
+		return nil, fmt.Errorf("missing proposer for slot %d", slot)
 	}
 
 	return &validator.publicKey, nil
