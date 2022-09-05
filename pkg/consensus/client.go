@@ -14,6 +14,9 @@ import (
 	"github.com/protolambda/eth2api/client/validatorapi"
 	"github.com/protolambda/zrnt/eth2/beacon/bellatrix"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
+	consensustypes "github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v3/testing/endtoend/helpers"
+	"github.com/prysmaticlabs/prysm/v3/time/slots"
 	"github.com/r3labs/sse/v2"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 	"go.uber.org/zap"
@@ -27,18 +30,20 @@ type ValidatorInfo struct {
 }
 
 type Client struct {
-	logger *zap.Logger
-	client *eth2api.Eth2HttpClient
-	clock  *Clock
+	logger      *zap.Logger
+	client      *eth2api.Eth2HttpClient
+	genesisTime time.Time
+	clock       *slots.SlotTicker
+	epochClock  *helpers.EpochTicker
 
-	proposerCache      map[types.Slot]ValidatorInfo
+	proposerCache      map[consensustypes.Slot]ValidatorInfo
 	proposerCacheMutex sync.RWMutex
 
-	executionCache      map[types.Slot]types.Hash
+	executionCache      map[consensustypes.Slot]types.Hash
 	executionCacheMutex sync.RWMutex
 }
 
-func NewClient(endpoint string, clock *Clock, logger *zap.Logger) *Client {
+func NewClient(endpoint string, clock *slots.SlotTicker, epochClock *helpers.EpochTicker, genesisTime time.Time, logger *zap.Logger) *Client {
 	client := &eth2api.Eth2HttpClient{
 		Addr: endpoint,
 		Cli: &http.Client{
@@ -52,13 +57,15 @@ func NewClient(endpoint string, clock *Clock, logger *zap.Logger) *Client {
 	return &Client{
 		logger:         logger,
 		client:         client,
+		genesisTime:    genesisTime,
 		clock:          clock,
-		proposerCache:  make(map[types.Slot]ValidatorInfo),
-		executionCache: make(map[types.Slot]types.Hash),
+		epochClock:     epochClock,
+		proposerCache:  make(map[consensustypes.Slot]ValidatorInfo),
+		executionCache: make(map[consensustypes.Slot]types.Hash),
 	}
 }
 
-func (c *Client) GetParentHash(slot types.Slot) (types.Hash, error) {
+func (c *Client) GetParentHash(slot consensustypes.Slot) (types.Hash, error) {
 	targetSlot := slot - 1
 	c.executionCacheMutex.RLock()
 	parentHash, ok := c.executionCache[targetSlot]
@@ -69,7 +76,7 @@ func (c *Client) GetParentHash(slot types.Slot) (types.Hash, error) {
 	return parentHash, nil
 }
 
-func (c *Client) GetProposerPublicKey(slot types.Slot) (*types.PublicKey, error) {
+func (c *Client) GetProposerPublicKey(slot consensustypes.Slot) (*types.PublicKey, error) {
 	c.proposerCacheMutex.RLock()
 	defer c.proposerCacheMutex.RUnlock()
 
@@ -81,7 +88,7 @@ func (c *Client) GetProposerPublicKey(slot types.Slot) (*types.PublicKey, error)
 	return &validator.publicKey, nil
 }
 
-func (c *Client) fetchProposers(epoch types.Epoch) error {
+func (c *Client) fetchProposers(epoch consensustypes.Epoch) error {
 	ctx := context.Background()
 
 	var proposerDuties eth2api.DependentProposerDuty
@@ -95,7 +102,7 @@ func (c *Client) fetchProposers(epoch types.Epoch) error {
 	// TODO handle reorgs, etc.
 	c.proposerCacheMutex.Lock()
 	for _, duty := range proposerDuties.Data {
-		c.proposerCache[uint64(duty.Slot)] = ValidatorInfo{
+		c.proposerCache[consensustypes.Slot(duty.Slot)] = ValidatorInfo{
 			publicKey: types.PublicKey(duty.Pubkey),
 			index:     uint64(duty.ValidatorIndex),
 		}
@@ -105,7 +112,7 @@ func (c *Client) fetchProposers(epoch types.Epoch) error {
 	return nil
 }
 
-func (c *Client) loadData(epoch types.Epoch) error {
+func (c *Client) loadData(epoch consensustypes.Epoch) error {
 	err := c.fetchProposers(epoch)
 	if err != nil {
 		return err
@@ -138,7 +145,7 @@ func (c *Client) streamHeads() <-chan types.Coordinate {
 				return
 			}
 			head := types.Coordinate{
-				Slot: types.Slot(slot),
+				Slot: consensustypes.Slot(slot),
 				Root: event.Block,
 			}
 			ch <- head
@@ -150,7 +157,7 @@ func (c *Client) streamHeads() <-chan types.Coordinate {
 	return ch
 }
 
-func (c *Client) fetchExecutionHash(slot types.Slot) (types.Hash, error) {
+func (c *Client) fetchExecutionHash(slot consensustypes.Slot) (types.Hash, error) {
 	ctx := context.Background()
 
 	blockID := eth2api.BlockIdSlot(slot)
@@ -192,8 +199,7 @@ func (c *Client) runSlotTasks(wg *sync.WaitGroup) {
 	logger := c.logger.Sugar()
 
 	// load data for the previous slot
-	now := time.Now().Unix()
-	currentSlot := c.clock.currentSlot(now)
+	currentSlot := slots.SinceGenesis(c.genesisTime)
 	_, err := c.fetchExecutionHash(currentSlot - 1)
 	if err != nil {
 		logger.Warnf("could not fetch latest execution hash for slot %d: %v", currentSlot, err)
@@ -218,28 +224,20 @@ func (c *Client) runSlotTasks(wg *sync.WaitGroup) {
 func (c *Client) runEpochTasks(wg *sync.WaitGroup) {
 	logger := c.logger.Sugar()
 
-	epochs := c.clock.TickEpochs()
-
-	// load data for the current epoch
-	epoch := <-epochs
-	err := c.loadData(epoch)
-	if err != nil {
-		logger.Warnf("could not load consensus state for epoch %d: %v", epoch, err)
-	}
-
-	// load data for the next epoch, as we will typically do
-	err = c.loadData(epoch + 1)
-	if err != nil {
-		logger.Warnf("could not load consensus state for epoch %d: %v", epoch, err)
-	}
-	// signal to caller that we have done the initialization...
-	wg.Done()
-
-	for epoch := range epochs {
-		err := c.loadData(epoch + 1)
+	for epoch := range c.epochClock.C() {
+		// load data for the current epoch
+		err := c.loadData(consensustypes.Epoch(epoch))
 		if err != nil {
 			logger.Warnf("could not load consensus state for epoch %d: %v", epoch, err)
 		}
+
+		// load data for the next epoch, as we will typically do
+		err = c.loadData(consensustypes.Epoch(epoch) + 1)
+		if err != nil {
+			logger.Warnf("could not load consensus state for epoch %d: %v", epoch, err)
+		}
+		// signal to caller that we have done the initialization...
+		wg.Done()
 	}
 }
 
