@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -15,18 +16,26 @@ type Config struct {
 type Server struct {
 	config *Config
 	logger *zap.Logger
+	srv    *http.Server
 }
 
 func New(config *Config, logger *zap.Logger) *Server {
 	return &Server{
 		config: config,
 		logger: logger,
+		srv: &http.Server{
+			Addr: fmt.Sprintf("%s:%d", config.Host, config.Port),
+		},
 	}
 }
 
 func (s *Server) Run(mux *http.ServeMux) error {
+	s.srv.Handler = mux
 	logger := s.logger.Sugar()
-	host := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
-	logger.Infof("API server listening on %s", host)
-	return http.ListenAndServe(host, mux)
+	logger.Infof("API server listening on %s:%d", s.config.Host, s.config.Port)
+	return s.srv.ListenAndServe()
+}
+
+func (s *Server) Shutdown() error {
+	return s.srv.Shutdown(context.Background())
 }
