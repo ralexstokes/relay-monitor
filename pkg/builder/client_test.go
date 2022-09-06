@@ -33,5 +33,4 @@ func TestClientBid(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
 }

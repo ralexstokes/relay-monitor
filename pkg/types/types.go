@@ -4,8 +4,10 @@ import (
 	"github.com/flashbots/go-boost-utils/types"
 )
 
-type Slot = uint64
-type Epoch = uint64
+type (
+	Slot  = uint64
+	Epoch = uint64
+)
 
 type PublicKey = types.PublicKey
 

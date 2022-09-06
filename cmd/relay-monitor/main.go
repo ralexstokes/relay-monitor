@@ -11,9 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var (
-	configFile = flag.String("config", "config.example.yaml", "path to config file")
-)
+var configFile = flag.String("config", "config.example.yaml", "path to config file")
 
 func main() {
 	flag.Parse()
@@ -25,7 +23,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not open log file: %v", err)
 	}
-	defer zapLogger.Sync()
+	defer func() {
+		err := zapLogger.Sync()
+		if err != nil {
+			log.Fatalf("could not flush log: %v", err)
+		}
+	}()
 
 	logger := zapLogger.Sugar()
 
