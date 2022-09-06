@@ -48,14 +48,6 @@ class AuctionTranscript(Container):
     acceptance: SignedBlindedBeaconBlock
 ```
 
-and transcripts are signed by a given proposer to verify their authenticity.
-
-```python
-class SignedAuctionTranscript(Container):
-    transcript: AuctionTranscript
-    signature: BLSSignature
-```
-
 ### GET `/eth/v1/relay-monitor/faults`
 
 Exposes a summary of faults per relay.
