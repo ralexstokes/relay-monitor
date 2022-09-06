@@ -29,18 +29,14 @@ type Config struct {
 	Api       *api.Config      `yaml:"api"`
 }
 
-type RelayMetrics struct {
-	Bids uint `json:"bids"`
-}
-
 type Monitor struct {
 	relays        []*builder.Client
 	apiServer     *api.Server
 	logger        *zap.Logger
 	networkConfig *NetworkConfig
 
-	relayMetrics     map[string]*RelayMetrics
-	relayMetricsLock sync.Mutex
+	relayFaults     map[string]*RelayFaults
+	relayFaultsLock sync.Mutex
 
 	clock           *consensus.Clock
 	consensusClient *consensus.Client
@@ -50,7 +46,7 @@ func New(config *Config, zapLogger *zap.Logger) *Monitor {
 	logger := zapLogger.Sugar()
 
 	var relays []*builder.Client
-	relayMetrics := make(map[string]*RelayMetrics)
+	relayFaults := make(map[string]*RelayFaults)
 	for _, endpoint := range config.Relays {
 		relay, err := builder.NewClient(endpoint)
 		if err != nil {
@@ -65,7 +61,7 @@ func New(config *Config, zapLogger *zap.Logger) *Monitor {
 		}
 
 		relays = append(relays, relay)
-		relayMetrics[relay.ID()] = &RelayMetrics{}
+		relayFaults[relay.ID()] = &RelayFaults{}
 	}
 
 	clock := consensus.NewClock(config.Network.GenesisTime, config.Network.SlotsPerSecond, config.Network.SlotsPerEpoch)
@@ -74,7 +70,7 @@ func New(config *Config, zapLogger *zap.Logger) *Monitor {
 		apiServer:       api.New(config.Api, zapLogger),
 		logger:          zapLogger,
 		networkConfig:   config.Network,
-		relayMetrics:    relayMetrics,
+		relayFaults:     relayFaults,
 		clock:           clock,
 		consensusClient: consensus.NewClient(config.Consensus.Endpoint, clock, zapLogger),
 	}
@@ -101,10 +97,10 @@ func (s *Monitor) monitorRelay(relay *builder.Client, wg *sync.WaitGroup) {
 		if err != nil {
 			logger.Warnw("could not get bid from relay", "error", err, "relayPublicKey", relayID, "slot", slot, "parentHash", parentHash, "proposer", publicKey)
 		} else if bid != nil {
-			s.relayMetricsLock.Lock()
-			metrics := s.relayMetrics[relayID]
-			metrics.Bids += 1
-			s.relayMetricsLock.Unlock()
+			s.relayFaultsLock.Lock()
+			faults := s.relayFaults[relayID]
+			faults.ValidBids += 1
+			s.relayFaultsLock.Unlock()
 			logger.Debugw("got bid", "value", bid.Message.Value, "header", bid.Message.Header, "publicKey", bid.Message.Pubkey, "id", relayID)
 		}
 	}
@@ -119,25 +115,25 @@ func (s *Monitor) monitorRelays(wg *sync.WaitGroup) {
 	wg.Done()
 }
 
-func (s *Monitor) handleRelayMetricsRequest(w http.ResponseWriter, r *http.Request) {
+func (s *Monitor) handleRelayFaultsRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
 	encoder := json.NewEncoder(w)
 
-	s.relayMetricsLock.Lock()
-	defer s.relayMetricsLock.Unlock()
+	s.relayFaultsLock.Lock()
+	defer s.relayFaultsLock.Unlock()
 
 	logger := s.logger.Sugar()
-	err := encoder.Encode(s.relayMetrics)
+	err := encoder.Encode(s.relayFaults)
 	if err != nil {
-		logger.Errorw("could not encode relay metrics", "error", err)
+		logger.Errorw("could not encode relay faults", "error", err)
 	}
 }
 
 func (s *Monitor) serveApi() error {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/relay/metrics", s.handleRelayMetricsRequest)
+	mux.HandleFunc("/api/v1/relay-monitor/faults", s.handleRelayFaultsRequest)
 	return s.apiServer.Run(mux)
 }
 
