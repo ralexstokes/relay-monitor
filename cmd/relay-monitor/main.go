@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	monitor "github.com/ralexstokes/relay-monitor/pkg"
+	"github.com/ralexstokes/relay-monitor/pkg/monitor"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/yaml.v3"

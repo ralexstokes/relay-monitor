@@ -59,3 +59,24 @@ class SignedAuctionTranscript(Container):
 ### GET `/eth/v1/relay-monitor/faults`
 
 Exposes a summary of faults per relay.
+
+This response contains a map of relay public key to a mapping of observed fault counts.
+
+The types of faults and their meaning can be found here: https://hackmd.io/A2uex3QFSfiaJJ9BKxw-XA?view#behavior-faults
+
+Example response:
+
+```json
+{
+  "0x845bd072b7cd566f02faeb0a4033ce9399e42839ced64e8b2adcfc859ed1e8e1a5a293336a49feac6d9a5edb779be53a": {
+    "valid_bids": 0,
+    "malformed_bids": 0,
+    "consensus_invalid_bids": 0,
+    "payment_invalid_bids": 0,
+    "nonconforming_bids": 0,
+    "malformed_payloads": 0,
+    "consensus_invalid_payloads": 0,
+    "unavailable_payloads": 0
+  }
+}
+```
