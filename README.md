@@ -6,6 +6,18 @@ A service to monitor a set of relayers in the external builder network on Ethere
 
 Work in progress. Not ready for use yet.
 
+## Dependencies
+
+Go v1.19+
+
+Requires a consensus client that implements the standard [beacon node APIs](https://ethereum.github.io/beacon-APIs).
+
+Every other required information is given in the configuration, e.g. `config.example.yaml`.
+
+## Operation
+
+`$ go run ./cmd/relay-monitor/main.go -config example.config`
+
 ## Implementation
 
 The monitor is structured as a series of components that ingest data and produce a live stream of fault data for each configured relay.
