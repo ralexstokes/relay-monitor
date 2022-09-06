@@ -93,7 +93,7 @@ func (c *Client) GetParentHash(slot consensustypes.Slot) (types.Hash, error) {
 func (c *Client) GetProposerPublicKey(slot consensustypes.Slot) (*types.PublicKey, error) {
 	validator, ok := c.proposerCache.Get(slot)
 	if !ok {
-		return nil, fmt.Errorf("missing proposal for slot %d", slot)
+		return nil, fmt.Errorf("missing proposer for slot %d", slot)
 	}
 
 	if v, ok := validator.(ValidatorInfo); ok {
