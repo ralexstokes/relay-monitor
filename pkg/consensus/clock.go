@@ -12,7 +12,7 @@ type Clock struct {
 	slotsPerEpoch  uint64
 }
 
-func NewClock(genesisTime uint64, slotsPerSecond uint64, slotsPerEpoch uint64) *Clock {
+func NewClock(genesisTime, slotsPerSecond, slotsPerEpoch uint64) *Clock {
 	return &Clock{
 		genesisTime:    genesisTime,
 		slotsPerSecond: slotsPerSecond,
