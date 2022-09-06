@@ -24,7 +24,7 @@ func (c *Clock) slotInSeconds(slot types.Slot) int64 {
 	return int64(slot*c.slotsPerSecond + c.genesisTime)
 }
 
-func (c *Clock) currentSlot(currentTime int64) types.Slot {
+func (c *Clock) CurrentSlot(currentTime int64) types.Slot {
 	diff := currentTime - int64(c.genesisTime)
 	// TODO better handling of pre-genesis
 	if diff < 0 {
@@ -38,7 +38,7 @@ func (c *Clock) TickSlots() chan types.Slot {
 	go func() {
 		for {
 			now := time.Now().Unix()
-			currentSlot := c.currentSlot(now)
+			currentSlot := c.CurrentSlot(now)
 			ch <- currentSlot
 			nextSlot := currentSlot + 1
 			nextSlotStart := c.slotInSeconds(nextSlot)

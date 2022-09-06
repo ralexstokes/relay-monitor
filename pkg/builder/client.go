@@ -14,17 +14,13 @@ import (
 const clientTimeoutSec = 2
 
 type Client struct {
-	endpoint string
-	identity string
-	client   http.Client
+	endpoint  string
+	PublicKey types.PublicKey
+	client    http.Client
 }
 
 func (c *Client) String() string {
-	return c.ID()
-}
-
-func (c *Client) ID() string {
-	return c.identity
+	return c.PublicKey.String()
 }
 
 func NewClient(endpoint string) (*Client, error) {
@@ -33,15 +29,20 @@ func NewClient(endpoint string) (*Client, error) {
 		return nil, err
 	}
 
-	publicKey := u.User.Username()
+	publicKeyStr := u.User.Username()
+	var publicKey types.PublicKey
+	err = publicKey.UnmarshalText([]byte(publicKeyStr))
+	if err != nil {
+		return nil, err
+	}
 
 	client := http.Client{
 		Timeout: clientTimeoutSec * time.Second,
 	}
 	return &Client{
-		endpoint: endpoint,
-		identity: publicKey,
-		client:   client,
+		endpoint:  endpoint,
+		PublicKey: publicKey,
+		client:    client,
 	}, nil
 }
 

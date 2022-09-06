@@ -64,7 +64,7 @@ func (c *Client) GetParentHash(slot types.Slot) (types.Hash, error) {
 	parentHash, ok := c.executionCache[targetSlot]
 	c.executionCacheMutex.RUnlock()
 	if !ok {
-		return c.fetchExecutionHash(targetSlot)
+		return c.FetchExecutionHash(targetSlot)
 	}
 	return parentHash, nil
 }
@@ -105,7 +105,7 @@ func (c *Client) fetchProposers(epoch types.Epoch) error {
 	return nil
 }
 
-func (c *Client) loadData(epoch types.Epoch) error {
+func (c *Client) LoadData(epoch types.Epoch) error {
 	err := c.fetchProposers(epoch)
 	if err != nil {
 		return err
@@ -119,7 +119,7 @@ type headEvent struct {
 	Block types.Root `json:"block"`
 }
 
-func (c *Client) streamHeads() <-chan types.Coordinate {
+func (c *Client) StreamHeads() <-chan types.Coordinate {
 	logger := c.logger.Sugar()
 
 	sseClient := sse.NewClient(c.client.Addr + "/eth/v1/events?topics=head")
@@ -150,7 +150,7 @@ func (c *Client) streamHeads() <-chan types.Coordinate {
 	return ch
 }
 
-func (c *Client) fetchExecutionHash(slot types.Slot) (types.Hash, error) {
+func (c *Client) FetchExecutionHash(slot types.Slot) (types.Hash, error) {
 	ctx := context.Background()
 
 	blockID := eth2api.BlockIdSlot(slot)
@@ -186,69 +186,4 @@ func (c *Client) fetchExecutionHash(slot types.Slot) (types.Hash, error) {
 	c.executionCacheMutex.Unlock()
 
 	return executionHash, nil
-}
-
-func (c *Client) runSlotTasks(wg *sync.WaitGroup) {
-	logger := c.logger.Sugar()
-
-	// load data for the previous slot
-	now := time.Now().Unix()
-	currentSlot := c.clock.currentSlot(now)
-	_, err := c.fetchExecutionHash(currentSlot - 1)
-	if err != nil {
-		logger.Warnf("could not fetch latest execution hash for slot %d: %v", currentSlot, err)
-	}
-
-	// load data for the current slot
-	_, err = c.fetchExecutionHash(currentSlot)
-	if err != nil {
-		logger.Warnf("could not fetch latest execution hash for slot %d: %v", currentSlot, err)
-	}
-	// done with init...
-	wg.Done()
-
-	for head := range c.streamHeads() {
-		_, err := c.fetchExecutionHash(head.Slot)
-		if err != nil {
-			logger.Warnf("could not fetch latest execution hash for slot %d: %v", head.Slot, err)
-		}
-	}
-}
-
-func (c *Client) runEpochTasks(wg *sync.WaitGroup) {
-	logger := c.logger.Sugar()
-
-	epochs := c.clock.TickEpochs()
-
-	// load data for the current epoch
-	epoch := <-epochs
-	err := c.loadData(epoch)
-	if err != nil {
-		logger.Warnf("could not load consensus state for epoch %d: %v", epoch, err)
-	}
-
-	// load data for the next epoch, as we will typically do
-	err = c.loadData(epoch + 1)
-	if err != nil {
-		logger.Warnf("could not load consensus state for epoch %d: %v", epoch, err)
-	}
-	// signal to caller that we have done the initialization...
-	wg.Done()
-
-	for epoch := range epochs {
-		err := c.loadData(epoch + 1)
-		if err != nil {
-			logger.Warnf("could not load consensus state for epoch %d: %v", epoch, err)
-		}
-	}
-}
-
-func (c *Client) Run(wg *sync.WaitGroup) {
-	wg.Add(1)
-	go c.runSlotTasks(wg)
-
-	wg.Add(1)
-	go c.runEpochTasks(wg)
-
-	wg.Done()
 }

@@ -1,53 +1,30 @@
 package monitor
 
 import (
-	"encoding/json"
-	"net/http"
-	"sync"
+	"context"
 
+	"github.com/ralexstokes/relay-monitor/pkg/analysis"
 	"github.com/ralexstokes/relay-monitor/pkg/api"
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
+	"github.com/ralexstokes/relay-monitor/pkg/data"
 	"go.uber.org/zap"
 )
 
-type NetworkConfig struct {
-	Name           string `yaml:"name"`
-	GenesisTime    uint64 `yaml:"genesis_time"`
-	SlotsPerSecond uint64 `yaml:"slots_per_second"`
-	SlotsPerEpoch  uint64 `yaml:"slots_per_epoch"`
-}
-
-type ConsensusConfig struct {
-	Endpoint string `yaml:"endpoint"`
-}
-
-type Config struct {
-	Network   *NetworkConfig   `yaml:"network"`
-	Consensus *ConsensusConfig `yaml:"consensus"`
-	Relays    []string         `yaml:"relays"`
-	Api       *api.Config      `yaml:"api"`
-}
+const eventBufferSize uint = 32
 
 type Monitor struct {
-	relays        []*builder.Client
-	apiServer     *api.Server
 	logger        *zap.Logger
 	networkConfig *NetworkConfig
 
-	relayFaults     map[string]*RelayFaults
-	relayFaultsLock sync.Mutex
-
-	clock           *consensus.Clock
-	consensusClient *consensus.Client
+	api       *api.Server
+	collector *data.Collector
+	analyzer  *analysis.Analyzer
 }
 
-func New(config *Config, zapLogger *zap.Logger) *Monitor {
-	logger := zapLogger.Sugar()
-
+func parseRelaysFromEndpoint(logger *zap.SugaredLogger, relayEndpoints []string) []*builder.Client {
 	var relays []*builder.Client
-	relayFaults := make(map[string]*RelayFaults)
-	for _, endpoint := range config.Relays {
+	for _, endpoint := range relayEndpoints {
 		relay, err := builder.NewClient(endpoint)
 		if err != nil {
 			logger.Warnf("could not instantiate relay at %s: %v", endpoint, err)
@@ -61,104 +38,52 @@ func New(config *Config, zapLogger *zap.Logger) *Monitor {
 		}
 
 		relays = append(relays, relay)
-		relayFaults[relay.ID()] = &RelayFaults{}
 	}
+	if len(relays) == 0 {
+		logger.Warn("could not parse any relays, please check configuration")
+	}
+	return relays
+}
 
+func New(config *Config, zapLogger *zap.Logger) *Monitor {
+	logger := zapLogger.Sugar()
+
+	relays := parseRelaysFromEndpoint(logger, config.Relays)
 	clock := consensus.NewClock(config.Network.GenesisTime, config.Network.SlotsPerSecond, config.Network.SlotsPerEpoch)
+	consensusClient := consensus.NewClient(config.Consensus.Endpoint, clock, zapLogger)
+	events := make(chan data.Event, eventBufferSize)
+	collector := data.NewCollector(zapLogger, relays, clock, consensusClient, events)
+	analyzer := analysis.NewAnalyzer(zapLogger, relays, events)
+	apiServer := api.New(config.Api, zapLogger, analyzer)
 	return &Monitor{
-		relays:          relays,
-		apiServer:       api.New(config.Api, zapLogger),
-		logger:          zapLogger,
-		networkConfig:   config.Network,
-		relayFaults:     relayFaults,
-		clock:           clock,
-		consensusClient: consensus.NewClient(config.Consensus.Endpoint, clock, zapLogger),
+		logger:        zapLogger,
+		networkConfig: config.Network,
+		api:           apiServer,
+		collector:     collector,
+		analyzer:      analyzer,
 	}
 }
 
-func (s *Monitor) monitorRelay(relay *builder.Client, wg *sync.WaitGroup) {
-	logger := s.logger.Sugar()
-
-	relayID := relay.ID()
-	logger.Infof("monitoring relay %s", relayID)
-
-	for slot := range s.clock.TickSlots() {
-		parentHash, err := s.consensusClient.GetParentHash(slot)
-		if err != nil {
-			logger.Warnw("error fetching bid", "error", err)
-			continue
-		}
-		publicKey, err := s.consensusClient.GetProposerPublicKey(slot)
-		if err != nil {
-			logger.Warnw("error fetching bid", "error", err)
-			continue
-		}
-		bid, err := relay.GetBid(slot, parentHash, *publicKey)
-		if err != nil {
-			logger.Warnw("could not get bid from relay", "error", err, "relayPublicKey", relayID, "slot", slot, "parentHash", parentHash, "proposer", publicKey)
-		} else if bid != nil {
-			s.relayFaultsLock.Lock()
-			faults := s.relayFaults[relayID]
-			faults.ValidBids += 1
-			s.relayFaultsLock.Unlock()
-			logger.Debugw("got bid", "value", bid.Message.Value, "header", bid.Message.Header, "publicKey", bid.Message.Pubkey, "id", relayID)
-		}
-	}
-	wg.Done()
-}
-
-func (s *Monitor) monitorRelays(wg *sync.WaitGroup) {
-	for _, relay := range s.relays {
-		wg.Add(1)
-		go s.monitorRelay(relay, wg)
-	}
-	wg.Done()
-}
-
-func (s *Monitor) handleRelayFaultsRequest(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	encoder := json.NewEncoder(w)
-
-	s.relayFaultsLock.Lock()
-	defer s.relayFaultsLock.Unlock()
-
-	logger := s.logger.Sugar()
-	err := encoder.Encode(s.relayFaults)
-	if err != nil {
-		logger.Errorw("could not encode relay faults", "error", err)
-	}
-}
-
-func (s *Monitor) serveApi() error {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/relay-monitor/faults", s.handleRelayFaultsRequest)
-	return s.apiServer.Run(mux)
-}
-
-func (s *Monitor) Run() {
+func (s *Monitor) Run(ctx context.Context) {
 	logger := s.logger.Sugar()
 
 	logger.Infof("starting relay monitor for %s network", s.networkConfig.Name)
 
-	// TODO error graph
-
-	var wg sync.WaitGroup
-
-	wg.Add(1)
-	go s.consensusClient.Run(&wg)
-	wg.Wait()
-
-	wg.Add(1)
-	go s.monitorRelays(&wg)
-
 	go func() {
-		err := s.serveApi()
+		err := s.collector.Run(ctx)
 		if err != nil {
-			logger.Errorw("error serving api", "error", err)
+			logger.Warn("error running collector: %v", err)
+		}
+	}()
+	go func() {
+		err := s.analyzer.Run(ctx)
+		if err != nil {
+			logger.Warn("error running collector: %v", err)
 		}
 	}()
 
-	wg.Wait()
+	err := s.api.Run(ctx)
+	if err != nil {
+		logger.Warn("error running API server: %v", err)
+	}
 }

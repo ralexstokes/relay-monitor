@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"os"
@@ -44,5 +45,6 @@ func main() {
 	}
 
 	m := monitor.New(config, zapLogger)
-	m.Run()
+	ctx := context.Background()
+	m.Run(ctx)
 }
