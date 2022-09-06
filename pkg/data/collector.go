@@ -54,7 +54,9 @@ func (c *Collector) collectFromRelay(ctx context.Context, relay *builder.Client)
 				logger.Warnw("could not get bid from relay", "error", err, "relayPublicKey", relayID, "slot", slot, "parentHash", parentHash, "proposer", publicKey)
 			} else if bid != nil {
 				logger.Debugw("got bid", "value", bid.Message.Value, "header", bid.Message.Header, "publicKey", bid.Message.Pubkey, "id", relayID)
-				c.events <- Event{Relay: relayID, Bid: bid}
+				payload := BidEvent{Relay: relayID, Bid: bid}
+				// TODO what if this is slow
+				c.events <- Event{Payload: payload}
 			}
 		}
 	}
@@ -125,7 +127,6 @@ func (c *Collector) runEpochTasks(ctx context.Context) {
 func (c *Collector) collectConsensusData(ctx context.Context) {
 	go c.runSlotTasks(ctx)
 	go c.runEpochTasks(ctx)
-
 }
 
 func (c *Collector) Run(ctx context.Context) error {

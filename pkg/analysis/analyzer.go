@@ -51,11 +51,19 @@ func (a *Analyzer) Run(ctx context.Context) error {
 		case event := <-a.events:
 			logger.Debugf("got event: %v", event)
 
-			relayID := event.Relay
-			a.faultsLock.Lock()
-			faults := a.faults[relayID]
-			faults.ValidBids += 1
-			a.faultsLock.Unlock()
+			switch event := event.Payload.(type) {
+			case data.BidEvent:
+				relayID := event.Relay
+				a.faultsLock.Lock()
+				faults := a.faults[relayID]
+				faults.ValidBids += 1
+				a.faultsLock.Unlock()
+			case data.ValidatorRegistrationEvent:
+				// TODO validations on data
+			case data.AuctionTranscriptEvent:
+				// TODO validations on data
+				// inspect faults
+			}
 		case <-ctx.Done():
 			return nil
 		}

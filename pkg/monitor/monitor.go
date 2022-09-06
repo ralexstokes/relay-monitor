@@ -54,7 +54,7 @@ func New(config *Config, zapLogger *zap.Logger) *Monitor {
 	events := make(chan data.Event, eventBufferSize)
 	collector := data.NewCollector(zapLogger, relays, clock, consensusClient, events)
 	analyzer := analysis.NewAnalyzer(zapLogger, relays, events)
-	apiServer := api.New(config.Api, zapLogger, analyzer)
+	apiServer := api.New(config.Api, zapLogger, analyzer, events)
 	return &Monitor{
 		logger:        zapLogger,
 		networkConfig: config.Network,

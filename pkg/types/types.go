@@ -23,3 +23,10 @@ type Coordinate struct {
 	Slot Slot
 	Root Root
 }
+
+type SignedValidatorRegistration = types.SignedValidatorRegistration
+
+type AuctionTranscript struct {
+	Bid        Bid                            `json:"bid"`
+	Acceptance types.SignedBlindedBeaconBlock `json:"acceptance"`
+}
