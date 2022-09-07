@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"context"
 	"time"
 
 	"github.com/ralexstokes/relay-monitor/pkg/types"
@@ -33,10 +34,21 @@ func (c *Clock) CurrentSlot(currentTime int64) types.Slot {
 	return types.Slot(diff / int64(c.slotsPerSecond))
 }
 
-func (c *Clock) TickSlots() chan types.Slot {
+func (c *Clock) EpochForSlot(slot types.Slot) types.Epoch {
+	return slot / c.slotsPerEpoch
+}
+
+func (c *Clock) TickSlots(ctx context.Context) chan types.Slot {
 	ch := make(chan types.Slot, 1)
 	go func() {
 		for {
+			// TODO do not block if we are in the middle of the sleep at the end of this loop...
+			select {
+			case <-ctx.Done():
+				close(ch)
+				return
+			default:
+			}
 			now := time.Now().Unix()
 			currentSlot := c.CurrentSlot(now)
 			ch <- currentSlot
@@ -49,14 +61,14 @@ func (c *Clock) TickSlots() chan types.Slot {
 	return ch
 }
 
-func (c *Clock) TickEpochs() chan types.Epoch {
+func (c *Clock) TickEpochs(ctx context.Context) chan types.Epoch {
 	ch := make(chan types.Epoch, 1)
 	go func() {
-		slots := c.TickSlots()
+		slots := c.TickSlots(ctx)
 		currentSlot := <-slots
 		currentEpoch := currentSlot / c.slotsPerEpoch
 		ch <- currentEpoch
-		for slot := range c.TickSlots() {
+		for slot := range slots {
 			epoch := slot / c.slotsPerEpoch
 			if epoch > currentEpoch {
 				currentEpoch = epoch

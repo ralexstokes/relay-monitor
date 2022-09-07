@@ -44,7 +44,8 @@ func main() {
 		logger.Fatalf("could not load config: %v", err)
 	}
 
-	m := monitor.New(config, zapLogger)
 	ctx := context.Background()
+	logger.Infof("starting relay monitor for %s network", config.Network.Name)
+	m := monitor.New(ctx, config, zapLogger)
 	m.Run(ctx)
 }

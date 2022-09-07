@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"time"
 
 	"github.com/ralexstokes/relay-monitor/pkg/analysis"
 	"github.com/ralexstokes/relay-monitor/pkg/api"
@@ -14,8 +15,7 @@ import (
 const eventBufferSize uint = 32
 
 type Monitor struct {
-	logger        *zap.Logger
-	networkConfig *NetworkConfig
+	logger *zap.Logger
 
 	api       *api.Server
 	collector *data.Collector
@@ -45,29 +45,31 @@ func parseRelaysFromEndpoint(logger *zap.SugaredLogger, relayEndpoints []string)
 	return relays
 }
 
-func New(config *Config, zapLogger *zap.Logger) *Monitor {
+func New(ctx context.Context, config *Config, zapLogger *zap.Logger) *Monitor {
 	logger := zapLogger.Sugar()
 
 	relays := parseRelaysFromEndpoint(logger, config.Relays)
+
 	clock := consensus.NewClock(config.Network.GenesisTime, config.Network.SlotsPerSecond, config.Network.SlotsPerEpoch)
-	consensusClient := consensus.NewClient(config.Consensus.Endpoint, clock, zapLogger)
+	now := time.Now().Unix()
+	currentSlot := clock.CurrentSlot(now)
+	currentEpoch := clock.EpochForSlot(currentSlot)
+	consensusClient := consensus.NewClient(ctx, config.Consensus.Endpoint, zapLogger, currentSlot, currentEpoch, config.Network.SlotsPerEpoch)
+
 	events := make(chan data.Event, eventBufferSize)
 	collector := data.NewCollector(zapLogger, relays, clock, consensusClient, events)
 	analyzer := analysis.NewAnalyzer(zapLogger, relays, events)
 	apiServer := api.New(config.Api, zapLogger, analyzer, events)
 	return &Monitor{
-		logger:        zapLogger,
-		networkConfig: config.Network,
-		api:           apiServer,
-		collector:     collector,
-		analyzer:      analyzer,
+		logger:    zapLogger,
+		api:       apiServer,
+		collector: collector,
+		analyzer:  analyzer,
 	}
 }
 
 func (s *Monitor) Run(ctx context.Context) {
 	logger := s.logger.Sugar()
-
-	logger.Infof("starting relay monitor for %s network", s.networkConfig.Name)
 
 	go func() {
 		err := s.collector.Run(ctx)

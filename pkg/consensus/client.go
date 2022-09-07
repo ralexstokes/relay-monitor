@@ -29,7 +29,6 @@ type ValidatorInfo struct {
 type Client struct {
 	logger *zap.Logger
 	client *eth2api.Eth2HttpClient
-	clock  *Clock
 
 	proposerCache      map[types.Slot]ValidatorInfo
 	proposerCacheMutex sync.RWMutex
@@ -38,8 +37,8 @@ type Client struct {
 	executionCacheMutex sync.RWMutex
 }
 
-func NewClient(endpoint string, clock *Clock, logger *zap.Logger) *Client {
-	client := &eth2api.Eth2HttpClient{
+func NewClient(ctx context.Context, endpoint string, logger *zap.Logger, currentSlot types.Slot, currentEpoch types.Epoch, slotsPerEpoch uint64) *Client {
+	httpClient := &eth2api.Eth2HttpClient{
 		Addr: endpoint,
 		Cli: &http.Client{
 			Transport: &http.Transport{
@@ -49,45 +48,81 @@ func NewClient(endpoint string, clock *Clock, logger *zap.Logger) *Client {
 		},
 		Codec: eth2api.JSONCodec{},
 	}
-	return &Client{
+
+	client := &Client{
 		logger:         logger,
-		client:         client,
-		clock:          clock,
+		client:         httpClient,
 		proposerCache:  make(map[types.Slot]ValidatorInfo),
 		executionCache: make(map[types.Slot]types.Hash),
 	}
+
+	err := client.loadCurrentContext(ctx, currentSlot, currentEpoch, slotsPerEpoch)
+	if err != nil {
+		logger := logger.Sugar()
+		logger.Warn("could not load the current context from the consensus client")
+	}
+
+	return client
 }
 
-func (c *Client) GetParentHash(slot types.Slot) (types.Hash, error) {
+func (c *Client) loadCurrentContext(ctx context.Context, currentSlot types.Slot, currentEpoch types.Epoch, slotsPerEpoch uint64) error {
+	logger := c.logger.Sugar()
+
+	var baseSlot uint64
+	if currentSlot > slotsPerEpoch {
+		baseSlot = currentSlot - slotsPerEpoch
+	}
+
+	for i := baseSlot; i < slotsPerEpoch; i++ {
+		_, err := c.FetchExecutionHash(ctx, i)
+		if err != nil {
+			logger.Warnf("could not fetch latest execution hash for slot %d: %v", currentSlot, err)
+		}
+	}
+
+	err := c.FetchProposers(ctx, currentEpoch)
+	if err != nil {
+		logger.Warnf("could not load consensus state for epoch %d: %v", currentEpoch, err)
+	}
+
+	nextEpoch := currentEpoch + 1
+	err = c.FetchProposers(ctx, nextEpoch)
+	if err != nil {
+		logger.Warnf("could not load consensus state for epoch %d: %v", nextEpoch, err)
+	}
+
+	return nil
+}
+
+func (c *Client) GetParentHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
 	targetSlot := slot - 1
 	c.executionCacheMutex.RLock()
 	parentHash, ok := c.executionCache[targetSlot]
 	c.executionCacheMutex.RUnlock()
 	if !ok {
-		return c.FetchExecutionHash(targetSlot)
+		return c.FetchExecutionHash(ctx, targetSlot)
 	}
 	return parentHash, nil
 }
 
-func (c *Client) GetProposerPublicKey(slot types.Slot) (*types.PublicKey, error) {
+func (c *Client) GetProposerPublicKey(ctx context.Context, slot types.Slot) (*types.PublicKey, error) {
 	c.proposerCacheMutex.RLock()
 	defer c.proposerCacheMutex.RUnlock()
 
 	validator, ok := c.proposerCache[slot]
 	if !ok {
+		// TODO consider fallback to grab the assignments for the missing epoch...
 		return nil, fmt.Errorf("missing proposer for slot %d", slot)
 	}
 
 	return &validator.publicKey, nil
 }
 
-func (c *Client) fetchProposers(epoch types.Epoch) error {
-	ctx := context.Background()
-
+func (c *Client) FetchProposers(ctx context.Context, epoch types.Epoch) error {
 	var proposerDuties eth2api.DependentProposerDuty
 	syncing, err := validatorapi.ProposerDuties(ctx, c.client, common.Epoch(epoch), &proposerDuties)
 	if syncing {
-		return fmt.Errorf("could not fetch proposal duties in epoch %d because node is syncing", epoch)
+		return fmt.Errorf("could not Fetch proposal duties in epoch %d because node is syncing", epoch)
 	} else if err != nil {
 		return err
 	}
@@ -105,13 +140,57 @@ func (c *Client) fetchProposers(epoch types.Epoch) error {
 	return nil
 }
 
-func (c *Client) LoadData(epoch types.Epoch) error {
-	err := c.fetchProposers(epoch)
-	if err != nil {
-		return err
+func (c *Client) backFillExecutionHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
+	for i := slot; i > 0; i-- {
+		targetSlot := i - 1
+		c.executionCacheMutex.RLock()
+		executionHash, ok := c.executionCache[targetSlot]
+		c.executionCacheMutex.RUnlock()
+		if ok {
+			for i := targetSlot; i < slot; i++ {
+				c.executionCacheMutex.Lock()
+				c.executionCache[i+1] = executionHash
+				c.executionCacheMutex.Unlock()
+			}
+			return executionHash, nil
+		}
+	}
+	return types.Hash{}, fmt.Errorf("no execution hashes present before %d (inclusive)", slot)
+}
+
+func (c *Client) FetchExecutionHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
+	// TODO handle reorgs, etc.
+	c.executionCacheMutex.Lock()
+	executionHash, ok := c.executionCache[slot]
+	if ok {
+		return executionHash, nil
+	}
+	c.executionCacheMutex.Unlock()
+
+	blockID := eth2api.BlockIdSlot(slot)
+
+	var signedBeaconBlock eth2api.VersionedSignedBeaconBlock
+	exists, err := beaconapi.BlockV2(ctx, c.client, blockID, &signedBeaconBlock)
+	if !exists {
+		// TODO move search to `GetParentHash`
+		// TODO also instantiate with first execution hash...
+		return c.backFillExecutionHash(ctx, slot)
+	} else if err != nil {
+		return types.Hash{}, err
 	}
 
-	return nil
+	bellatrixBlock, ok := signedBeaconBlock.Data.(*bellatrix.SignedBeaconBlock)
+	if !ok {
+		return types.Hash{}, fmt.Errorf("could not parse block %s", signedBeaconBlock)
+	}
+	executionHash = types.Hash(bellatrixBlock.Message.Body.ExecutionPayload.BlockHash)
+
+	// TODO handle reorgs, etc.
+	c.executionCacheMutex.Lock()
+	c.executionCache[slot] = executionHash
+	c.executionCacheMutex.Unlock()
+
+	return executionHash, nil
 }
 
 type headEvent struct {
@@ -119,13 +198,13 @@ type headEvent struct {
 	Block types.Root `json:"block"`
 }
 
-func (c *Client) StreamHeads() <-chan types.Coordinate {
+func (c *Client) StreamHeads(ctx context.Context) <-chan types.Coordinate {
 	logger := c.logger.Sugar()
 
 	sseClient := sse.NewClient(c.client.Addr + "/eth/v1/events?topics=head")
 	ch := make(chan types.Coordinate, 1)
 	go func() {
-		err := sseClient.SubscribeRaw(func(msg *sse.Event) {
+		err := sseClient.SubscribeRawWithContext(ctx, func(msg *sse.Event) {
 			var event headEvent
 			err := json.Unmarshal(msg.Data, &event)
 			if err != nil {
@@ -148,42 +227,4 @@ func (c *Client) StreamHeads() <-chan types.Coordinate {
 		}
 	}()
 	return ch
-}
-
-func (c *Client) FetchExecutionHash(slot types.Slot) (types.Hash, error) {
-	ctx := context.Background()
-
-	blockID := eth2api.BlockIdSlot(slot)
-
-	var signedBeaconBlock eth2api.VersionedSignedBeaconBlock
-	exists, err := beaconapi.BlockV2(ctx, c.client, blockID, &signedBeaconBlock)
-	if !exists {
-		// assume missing slot, use execution hash from previous slot(s)
-		for i := slot; i > 0; i-- {
-			targetSlot := i - 1
-			c.executionCacheMutex.RLock()
-			executionHash, ok := c.executionCache[targetSlot]
-			c.executionCacheMutex.RUnlock()
-			if !ok {
-				continue
-			}
-			return executionHash, nil
-		}
-		return types.Hash{}, fmt.Errorf("block at slot %d is missing", slot)
-	} else if err != nil {
-		return types.Hash{}, err
-	}
-
-	bellatrixBlock, ok := signedBeaconBlock.Data.(*bellatrix.SignedBeaconBlock)
-	if !ok {
-		return types.Hash{}, fmt.Errorf("could not parse block %s", signedBeaconBlock)
-	}
-	executionHash := types.Hash(bellatrixBlock.Message.Body.ExecutionPayload.BlockHash)
-
-	// TODO handle reorgs, etc.
-	c.executionCacheMutex.Lock()
-	c.executionCache[slot] = executionHash
-	c.executionCacheMutex.Unlock()
-
-	return executionHash, nil
 }
