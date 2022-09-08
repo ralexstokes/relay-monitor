@@ -9,20 +9,20 @@ import (
 
 type Clock struct {
 	genesisTime    uint64
-	slotsPerSecond uint64
+	secondsPerSlot uint64
 	slotsPerEpoch  uint64
 }
 
-func NewClock(genesisTime, slotsPerSecond, slotsPerEpoch uint64) *Clock {
+func NewClock(genesisTime, secondsPerSlot, slotsPerEpoch uint64) *Clock {
 	return &Clock{
 		genesisTime:    genesisTime,
-		slotsPerSecond: slotsPerSecond,
+		secondsPerSlot: secondsPerSlot,
 		slotsPerEpoch:  slotsPerEpoch,
 	}
 }
 
 func (c *Clock) slotInSeconds(slot types.Slot) int64 {
-	return int64(slot*c.slotsPerSecond + c.genesisTime)
+	return int64(slot*c.secondsPerSlot + c.genesisTime)
 }
 
 func (c *Clock) CurrentSlot(currentTime int64) types.Slot {
@@ -31,7 +31,7 @@ func (c *Clock) CurrentSlot(currentTime int64) types.Slot {
 	if diff < 0 {
 		return 0
 	}
-	return types.Slot(diff / int64(c.slotsPerSecond))
+	return types.Slot(diff / int64(c.secondsPerSlot))
 }
 
 func (c *Clock) EpochForSlot(slot types.Slot) types.Epoch {

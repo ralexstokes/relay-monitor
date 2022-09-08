@@ -50,7 +50,7 @@ func New(ctx context.Context, config *Config, zapLogger *zap.Logger) *Monitor {
 
 	relays := parseRelaysFromEndpoint(logger, config.Relays)
 
-	clock := consensus.NewClock(config.Network.GenesisTime, config.Network.SlotsPerSecond, config.Network.SlotsPerEpoch)
+	clock := consensus.NewClock(config.Network.GenesisTime, config.Network.SecondsPerSlot, config.Network.SlotsPerEpoch)
 	now := time.Now().Unix()
 	currentSlot := clock.CurrentSlot(now)
 	currentEpoch := clock.EpochForSlot(currentSlot)

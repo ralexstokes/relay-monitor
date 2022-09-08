@@ -5,7 +5,7 @@ import "github.com/ralexstokes/relay-monitor/pkg/api"
 type NetworkConfig struct {
 	Name           string `yaml:"name"`
 	GenesisTime    uint64 `yaml:"genesis_time"`
-	SlotsPerSecond uint64 `yaml:"slots_per_second"`
+	SecondsPerSlot uint64 `yaml:"seconds_per_slot"`
 	SlotsPerEpoch  uint64 `yaml:"slots_per_epoch"`
 }
 

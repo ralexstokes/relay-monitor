@@ -2,7 +2,7 @@
 network:
   name: "sepolia"
   genesis_time: 1655733600
-  slots_per_second: 12
+  seconds_per_slot: 12
   slots_per_epoch: 32
 consensus:
   endpoint: "http://127.0.0.1:5052"
