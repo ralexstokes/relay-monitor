@@ -32,10 +32,10 @@ type AuctionTranscript struct {
 }
 
 type BidContext struct {
-	Slot              Slot
-	ParentHash        Hash
-	ProposerPublicKey PublicKey
-	RelayPublicKey    PublicKey
+	Slot              Slot      `json:"slot"`
+	ParentHash        Hash      `json:"parent_hash"`
+	ProposerPublicKey PublicKey `json:"proposer_public_key"`
+	RelayPublicKey    PublicKey `json:"relay_public_key"`
 }
 
 type SignedBlindedBeaconBlock = types.SignedBlindedBeaconBlock
