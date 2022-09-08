@@ -50,6 +50,7 @@ func (a *Analyzer) GetFaults() FaultRecord {
 
 func (a *Analyzer) processBid(ctx context.Context, event data.BidEvent) {
 	logger := a.logger.Sugar()
+	logger.Debugf("processing bid event %+v", event)
 
 	bidCtx := event.Context
 	bid := event.Bid
