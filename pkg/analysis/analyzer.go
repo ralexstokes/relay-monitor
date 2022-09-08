@@ -48,9 +48,8 @@ func (a *Analyzer) GetFaults() FaultRecord {
 	return faults
 }
 
-func (a *Analyzer) processBid(ctx context.Context, event data.BidEvent) {
+func (a *Analyzer) processBid(ctx context.Context, event *data.BidEvent) {
 	logger := a.logger.Sugar()
-	logger.Debugf("processing bid event %+v", event)
 
 	bidCtx := event.Context
 	bid := event.Bid
@@ -68,7 +67,6 @@ func (a *Analyzer) processBid(ctx context.Context, event data.BidEvent) {
 	faults := a.faults[relayID]
 	faults.TotalBids += 1
 	a.faultsLock.Unlock()
-	logger.Debug(a.faults)
 }
 
 func (a *Analyzer) processValidatorRegistration(ctx context.Context, event data.ValidatorRegistrationEvent) {
@@ -128,12 +126,14 @@ func (a *Analyzer) Run(ctx context.Context) error {
 			logger.Debugf("got event: %+v", event.Payload)
 
 			switch event := event.Payload.(type) {
-			case data.BidEvent:
+			case *data.BidEvent:
 				a.processBid(ctx, event)
 			case data.ValidatorRegistrationEvent:
 				a.processValidatorRegistration(ctx, event)
 			case data.AuctionTranscriptEvent:
 				a.processAuctionTranscript(ctx, event)
+			default:
+				logger.Warnf("unknown event type %T for event %+v!", event, event)
 			}
 		case <-ctx.Done():
 			return nil
