@@ -248,11 +248,11 @@ Example response:
 ```json
 {
   "0x845bd072b7cd566f02faeb0a4033ce9399e42839ced64e8b2adcfc859ed1e8e1a5a293336a49feac6d9a5edb779be53a": {
-    "valid_bids": 0,
+    "total_bids": 0,
     "malformed_bids": 0,
     "consensus_invalid_bids": 0,
     "payment_invalid_bids": 0,
-    "nonconforming_bids": 0,
+    "ignored_preferences_bids": 0,
     "malformed_payloads": 0,
     "consensus_invalid_payloads": 0,
     "unavailable_payloads": 0
