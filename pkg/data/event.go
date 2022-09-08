@@ -7,8 +7,8 @@ type Event struct {
 }
 
 type BidEvent struct {
-	Relay types.PublicKey
-	Bid   *types.Bid
+	Context *types.BidContext
+	Bid     *types.Bid
 }
 
 type ValidatorRegistrationEvent struct {

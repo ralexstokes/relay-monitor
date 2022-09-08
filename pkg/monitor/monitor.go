@@ -9,6 +9,7 @@ import (
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
 	"github.com/ralexstokes/relay-monitor/pkg/data"
+	"github.com/ralexstokes/relay-monitor/pkg/store"
 	"go.uber.org/zap"
 )
 
@@ -58,7 +59,8 @@ func New(ctx context.Context, config *Config, zapLogger *zap.Logger) *Monitor {
 
 	events := make(chan data.Event, eventBufferSize)
 	collector := data.NewCollector(zapLogger, relays, clock, consensusClient, events)
-	analyzer := analysis.NewAnalyzer(zapLogger, relays, events)
+	store := store.NewMemoryStore()
+	analyzer := analysis.NewAnalyzer(zapLogger, relays, events, store)
 	apiServer := api.New(config.Api, zapLogger, analyzer, events)
 	return &Monitor{
 		logger:    zapLogger,
