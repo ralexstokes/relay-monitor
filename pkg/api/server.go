@@ -108,6 +108,7 @@ func (s *Server) Run(ctx context.Context) error {
 	logger.Infof("API server listening on %s", host)
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/", get(s.handleFaultsRequest))
 	mux.HandleFunc(GetFaultEndpoint, get(s.handleFaultsRequest))
 	mux.HandleFunc(RegisterValidatorEndpoint, post(s.handleRegisterValidator))
 	mux.HandleFunc(PostAuctionTranscriptEndpoint, post(s.handleAuctionTranscript))
