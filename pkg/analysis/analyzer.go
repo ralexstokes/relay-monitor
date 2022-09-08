@@ -65,7 +65,7 @@ func (a *Analyzer) processBid(ctx context.Context, event data.BidEvent) {
 	relayID := bidCtx.RelayPublicKey
 	a.faultsLock.Lock()
 	faults := a.faults[relayID]
-	faults.ValidBids += 1
+	faults.TotalBids += 1
 	a.faultsLock.Unlock()
 }
 
