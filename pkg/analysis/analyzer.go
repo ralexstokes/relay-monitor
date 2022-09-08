@@ -67,6 +67,7 @@ func (a *Analyzer) processBid(ctx context.Context, event data.BidEvent) {
 	faults := a.faults[relayID]
 	faults.TotalBids += 1
 	a.faultsLock.Unlock()
+	logger.Debug(a.faults)
 }
 
 func (a *Analyzer) processValidatorRegistration(ctx context.Context, event data.ValidatorRegistrationEvent) {
