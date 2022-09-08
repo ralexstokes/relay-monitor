@@ -27,7 +27,7 @@ func NewCollector(zapLogger *zap.Logger, relays []*builder.Client, clock *consen
 	}
 }
 
-func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Client, slot types.Slot) (*types.Bid, error) {
+func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Client, slot types.Slot) (*BidEvent, error) {
 	parentHash, err := c.consensusClient.GetParentHash(ctx, slot)
 	if err != nil {
 		return nil, err
@@ -36,7 +36,21 @@ func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Clie
 	if err != nil {
 		return nil, err
 	}
-	return relay.GetBid(slot, parentHash, *publicKey)
+	bid, exists, err := relay.GetBid(slot, parentHash, *publicKey)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, nil
+	}
+	bidCtx := types.BidContext{
+		Slot:              slot,
+		ParentHash:        parentHash,
+		ProposerPublicKey: *publicKey,
+		RelayPublicKey:    relay.PublicKey,
+	}
+	event := &BidEvent{Context: &bidCtx, Bid: bid}
+	return event, nil
 }
 
 func (c *Collector) collectFromRelay(ctx context.Context, relay *builder.Client) {
@@ -50,16 +64,20 @@ func (c *Collector) collectFromRelay(ctx context.Context, relay *builder.Client)
 		case <-ctx.Done():
 			return
 		case slot := <-slots:
-			bid, err := c.collectBidFromRelay(ctx, relay, slot)
+			payload, err := c.collectBidFromRelay(ctx, relay, slot)
 			if err != nil {
 				logger.Warnw("could not get bid from relay", "error", err, "relayPublicKey", relayID, "slot", slot)
 				// TODO implement some retry logic...
-			} else if bid != nil {
-				logger.Debugw("got bid", "value", bid.Message.Value, "header", bid.Message.Header, "publicKey", bid.Message.Pubkey, "id", relayID)
-				payload := BidEvent{Relay: relayID, Bid: bid}
-				// TODO what if this is slow
-				c.events <- Event{Payload: payload}
+				continue
 			}
+			if payload == nil {
+				// No bid for this slot, continue
+				// TODO consider trying again...
+				continue
+			}
+			logger.Debugw("got bid", "relay", relayID, "context", payload.Context, "bid", payload.Bid)
+			// TODO what if this is slow
+			c.events <- Event{Payload: payload}
 		}
 	}
 }

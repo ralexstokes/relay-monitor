@@ -30,3 +30,12 @@ type AuctionTranscript struct {
 	Bid        Bid                            `json:"bid"`
 	Acceptance types.SignedBlindedBeaconBlock `json:"acceptance"`
 }
+
+type BidContext struct {
+	Slot              Slot
+	ParentHash        Hash
+	ProposerPublicKey PublicKey
+	RelayPublicKey    PublicKey
+}
+
+type SignedBlindedBeaconBlock = types.SignedBlindedBeaconBlock

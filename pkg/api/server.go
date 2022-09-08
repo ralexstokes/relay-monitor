@@ -67,7 +67,6 @@ func (s *Server) handleRegisterValidator(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// TODO store data
 	logger.Debugw("got validator registration", "data", registrations)
 
 	payload := data.ValidatorRegistrationEvent{
@@ -92,7 +91,6 @@ func (s *Server) handleAuctionTranscript(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// TODO store data
 	logger.Debugw("got auction transcript", "data", transcript)
 
 	payload := data.AuctionTranscriptEvent{

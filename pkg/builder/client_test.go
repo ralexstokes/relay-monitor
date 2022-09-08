@@ -32,7 +32,7 @@ func TestClientBid(t *testing.T) {
 		return
 	}
 
-	_, err = c.GetBid(100, types.Hash{}, types.PublicKey{})
+	_, _, err = c.GetBid(100, types.Hash{}, types.PublicKey{})
 	if err != nil {
 		t.Error(err)
 		return
