@@ -3,7 +3,6 @@ package consensus
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -24,8 +23,6 @@ const (
 	clientTimeoutSec = 5
 	cacheSize        = 128
 )
-
-var ErrInvalidCacheValue = errors.New("invalid value stored in cache")
 
 type ValidatorInfo struct {
 	publicKey types.PublicKey
@@ -54,11 +51,11 @@ func NewClient(ctx context.Context, endpoint string, logger *zap.Logger, current
 
 	proposerCache, err := lru.New(cacheSize)
 	if err != nil {
-		return &Client{}, err
+		return nil, err
 	}
 	executionCache, err := lru.New(cacheSize)
 	if err != nil {
-		return &Client{}, err
+		return nil, err
 	}
 
 	client := &Client{
@@ -106,30 +103,40 @@ func (c *Client) loadCurrentContext(ctx context.Context, currentSlot types.Slot,
 	return nil
 }
 
+func (c *Client) GetProposerCache(ctx context.Context, slot types.Slot) (ValidatorInfo, bool) {
+	val, ok := c.proposerCache.Get(slot)
+	if !ok {
+		return ValidatorInfo{}, ok
+	}
+	validator, ok := val.(ValidatorInfo)
+	return validator, ok
+}
+
+func (c *Client) GetExecutionCache(ctx context.Context, slot types.Slot) (types.Hash, bool) {
+	val, ok := c.executionCache.Get(slot)
+	if !ok {
+		return types.Hash{}, ok
+	}
+	hash, ok := val.(types.Hash)
+	return hash, ok
+}
+
 func (c *Client) GetParentHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
 	targetSlot := slot - 1
-	parentHash, ok := c.executionCache.Get(targetSlot)
+	parentHash, ok := c.GetExecutionCache(ctx, targetSlot)
 	if !ok {
 		return c.FetchExecutionHash(ctx, targetSlot)
 	}
-	if h, ok := parentHash.(types.Hash); ok {
-		return h, nil
-	} else {
-		return types.Hash{}, ErrInvalidCacheValue
-	}
+	return parentHash, nil
 }
 
 func (c *Client) GetProposerPublicKey(ctx context.Context, slot types.Slot) (*types.PublicKey, error) {
-	validator, ok := c.proposerCache.Get(slot)
+	validator, ok := c.GetProposerCache(ctx, slot)
 	if !ok {
 		// TODO consider fallback to grab the assignments for the missing epoch...
 		return nil, fmt.Errorf("missing proposer for slot %d", slot)
 	}
-	if v, ok := validator.(ValidatorInfo); ok {
-		return &v.publicKey, nil
-	} else {
-		return &types.PublicKey{}, ErrInvalidCacheValue
-	}
+	return &validator.publicKey, nil
 }
 
 func (c *Client) FetchProposers(ctx context.Context, epoch types.Epoch) error {
@@ -155,16 +162,12 @@ func (c *Client) FetchProposers(ctx context.Context, epoch types.Epoch) error {
 func (c *Client) backFillExecutionHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
 	for i := slot; i > 0; i-- {
 		targetSlot := i - 1
-		executionHash, ok := c.executionCache.Get(targetSlot)
+		executionHash, ok := c.GetExecutionCache(ctx, targetSlot)
 		if ok {
 			for i := targetSlot; i < slot; i++ {
 				c.executionCache.Add(i+1, executionHash)
 			}
-			if h, ok := executionHash.(types.Hash); ok {
-				return h, nil
-			} else {
-				return types.Hash{}, ErrInvalidCacheValue
-			}
+			return executionHash, nil
 		}
 	}
 	return types.Hash{}, fmt.Errorf("no execution hashes present before %d (inclusive)", slot)
@@ -172,13 +175,9 @@ func (c *Client) backFillExecutionHash(ctx context.Context, slot types.Slot) (ty
 
 func (c *Client) FetchExecutionHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
 	// TODO handle reorgs, etc.
-	executionHash, ok := c.executionCache.Get(slot)
+	executionHash, ok := c.GetExecutionCache(ctx, slot)
 	if ok {
-		if h, ok := executionHash.(types.Hash); ok {
-			return h, nil
-		} else {
-			return types.Hash{}, ErrInvalidCacheValue
-		}
+		return executionHash, nil
 	}
 
 	blockID := eth2api.BlockIdSlot(slot)
@@ -202,11 +201,7 @@ func (c *Client) FetchExecutionHash(ctx context.Context, slot types.Slot) (types
 	// TODO handle reorgs, etc.
 	c.executionCache.Add(slot, executionHash)
 
-	if h, ok := executionHash.(types.Hash); ok {
-		return h, nil
-	} else {
-		return types.Hash{}, ErrInvalidCacheValue
-	}
+	return executionHash, nil
 }
 
 type headEvent struct {

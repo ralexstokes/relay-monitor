@@ -58,7 +58,7 @@ func New(ctx context.Context, config *Config, zapLogger *zap.Logger) (*Monitor, 
 	currentEpoch := clock.EpochForSlot(currentSlot)
 	consensusClient, err := consensus.NewClient(ctx, config.Consensus.Endpoint, zapLogger, currentSlot, currentEpoch, config.Network.SlotsPerEpoch)
 	if err != nil {
-		return &Monitor{}, fmt.Errorf("could not instantiate consensus client: %v", err)
+		return nil, fmt.Errorf("could not instantiate consensus client: %v", err)
 	}
 
 	events := make(chan data.Event, eventBufferSize)
