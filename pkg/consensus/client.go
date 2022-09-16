@@ -103,38 +103,44 @@ func (c *Client) loadCurrentContext(ctx context.Context, currentSlot types.Slot,
 	return nil
 }
 
-func (c *Client) GetProposerCache(ctx context.Context, slot types.Slot) (ValidatorInfo, bool) {
+func (c *Client) GetProposer(ctx context.Context, slot types.Slot) (*ValidatorInfo, error) {
 	val, ok := c.proposerCache.Get(slot)
 	if !ok {
-		return ValidatorInfo{}, ok
+		return nil, fmt.Errorf("could not find proposer for slot %d", slot)
 	}
 	validator, ok := val.(ValidatorInfo)
-	return validator, ok
+	if !ok {
+		return nil, fmt.Errorf("internal: proposer cache contains an unexpected type %T", val)
+	}
+	return &validator, nil
 }
 
-func (c *Client) GetExecutionCache(ctx context.Context, slot types.Slot) (types.Hash, bool) {
+func (c *Client) GetExecutionHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
 	val, ok := c.executionCache.Get(slot)
 	if !ok {
-		return types.Hash{}, ok
+		return types.Hash{}, fmt.Errorf("could not find execution hash for slot %d", slot)
 	}
 	hash, ok := val.(types.Hash)
-	return hash, ok
+	if !ok {
+		return types.Hash{}, fmt.Errorf("internal: execution cache contains an unexpected type %T", val)
+	}
+	return hash, nil
 }
 
 func (c *Client) GetParentHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
 	targetSlot := slot - 1
-	parentHash, ok := c.GetExecutionCache(ctx, targetSlot)
-	if !ok {
+	parentHash, err := c.GetExecutionHash(ctx, targetSlot)
+	if err != nil {
 		return c.FetchExecutionHash(ctx, targetSlot)
 	}
 	return parentHash, nil
 }
 
 func (c *Client) GetProposerPublicKey(ctx context.Context, slot types.Slot) (*types.PublicKey, error) {
-	validator, ok := c.GetProposerCache(ctx, slot)
-	if !ok {
+	validator, err := c.GetProposer(ctx, slot)
+	if err != nil {
 		// TODO consider fallback to grab the assignments for the missing epoch...
-		return nil, fmt.Errorf("missing proposer for slot %d", slot)
+		return nil, fmt.Errorf("missing proposer for slot %d: %v", slot, err)
 	}
 	return &validator.publicKey, nil
 }
@@ -162,8 +168,8 @@ func (c *Client) FetchProposers(ctx context.Context, epoch types.Epoch) error {
 func (c *Client) backFillExecutionHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
 	for i := slot; i > 0; i-- {
 		targetSlot := i - 1
-		executionHash, ok := c.GetExecutionCache(ctx, targetSlot)
-		if ok {
+		executionHash, err := c.GetExecutionHash(ctx, targetSlot)
+		if err == nil {
 			for i := targetSlot; i < slot; i++ {
 				c.executionCache.Add(i+1, executionHash)
 			}
@@ -175,8 +181,8 @@ func (c *Client) backFillExecutionHash(ctx context.Context, slot types.Slot) (ty
 
 func (c *Client) FetchExecutionHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
 	// TODO handle reorgs, etc.
-	executionHash, ok := c.GetExecutionCache(ctx, slot)
-	if ok {
+	executionHash, err := c.GetExecutionHash(ctx, slot)
+	if err == nil {
 		return executionHash, nil
 	}
 
