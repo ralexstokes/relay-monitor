@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/ralexstokes/relay-monitor/pkg/analysis"
@@ -46,7 +47,7 @@ func parseRelaysFromEndpoint(logger *zap.SugaredLogger, relayEndpoints []string)
 	return relays
 }
 
-func New(ctx context.Context, config *Config, zapLogger *zap.Logger) *Monitor {
+func New(ctx context.Context, config *Config, zapLogger *zap.Logger) (*Monitor, error) {
 	logger := zapLogger.Sugar()
 
 	relays := parseRelaysFromEndpoint(logger, config.Relays)
@@ -55,7 +56,10 @@ func New(ctx context.Context, config *Config, zapLogger *zap.Logger) *Monitor {
 	now := time.Now().Unix()
 	currentSlot := clock.CurrentSlot(now)
 	currentEpoch := clock.EpochForSlot(currentSlot)
-	consensusClient := consensus.NewClient(ctx, config.Consensus.Endpoint, zapLogger, currentSlot, currentEpoch, config.Network.SlotsPerEpoch)
+	consensusClient, err := consensus.NewClient(ctx, config.Consensus.Endpoint, zapLogger, currentSlot, currentEpoch, config.Network.SlotsPerEpoch)
+	if err != nil {
+		return nil, fmt.Errorf("could not instantiate consensus client: %v", err)
+	}
 
 	events := make(chan data.Event, eventBufferSize)
 	collector := data.NewCollector(zapLogger, relays, clock, consensusClient, events)
@@ -67,7 +71,7 @@ func New(ctx context.Context, config *Config, zapLogger *zap.Logger) *Monitor {
 		api:       apiServer,
 		collector: collector,
 		analyzer:  analyzer,
-	}
+	}, nil
 }
 
 func (s *Monitor) Run(ctx context.Context) {

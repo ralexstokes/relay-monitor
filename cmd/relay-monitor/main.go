@@ -46,6 +46,10 @@ func main() {
 
 	ctx := context.Background()
 	logger.Infof("starting relay monitor for %s network", config.Network.Name)
-	m := monitor.New(ctx, config, zapLogger)
+	m, err := monitor.New(ctx, config, zapLogger)
+	if err != nil {
+		logger.Fatalf("could not start relay monitor: %v", err)
+	}
+
 	m.Run(ctx)
 }

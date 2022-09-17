@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"sync"
 	"time"
 
+	"github.com/hashicorp/golang-lru"
 	"github.com/protolambda/eth2api"
 	"github.com/protolambda/eth2api/client/beaconapi"
 	"github.com/protolambda/eth2api/client/validatorapi"
@@ -19,7 +19,10 @@ import (
 	"go.uber.org/zap"
 )
 
-const clientTimeoutSec = 5
+const (
+	clientTimeoutSec = 5
+	cacheSize        = 128
+)
 
 type ValidatorInfo struct {
 	publicKey types.PublicKey
@@ -30,14 +33,11 @@ type Client struct {
 	logger *zap.Logger
 	client *eth2api.Eth2HttpClient
 
-	proposerCache      map[types.Slot]ValidatorInfo
-	proposerCacheMutex sync.RWMutex
-
-	executionCache      map[types.Slot]types.Hash
-	executionCacheMutex sync.RWMutex
+	proposerCache  *lru.Cache
+	executionCache *lru.Cache
 }
 
-func NewClient(ctx context.Context, endpoint string, logger *zap.Logger, currentSlot types.Slot, currentEpoch types.Epoch, slotsPerEpoch uint64) *Client {
+func NewClient(ctx context.Context, endpoint string, logger *zap.Logger, currentSlot types.Slot, currentEpoch types.Epoch, slotsPerEpoch uint64) (*Client, error) {
 	httpClient := &eth2api.Eth2HttpClient{
 		Addr: endpoint,
 		Cli: &http.Client{
@@ -49,20 +49,29 @@ func NewClient(ctx context.Context, endpoint string, logger *zap.Logger, current
 		Codec: eth2api.JSONCodec{},
 	}
 
+	proposerCache, err := lru.New(cacheSize)
+	if err != nil {
+		return nil, err
+	}
+	executionCache, err := lru.New(cacheSize)
+	if err != nil {
+		return nil, err
+	}
+
 	client := &Client{
 		logger:         logger,
 		client:         httpClient,
-		proposerCache:  make(map[types.Slot]ValidatorInfo),
-		executionCache: make(map[types.Slot]types.Hash),
+		proposerCache:  proposerCache,
+		executionCache: executionCache,
 	}
 
-	err := client.loadCurrentContext(ctx, currentSlot, currentEpoch, slotsPerEpoch)
+	err = client.loadCurrentContext(ctx, currentSlot, currentEpoch, slotsPerEpoch)
 	if err != nil {
 		logger := logger.Sugar()
 		logger.Warn("could not load the current context from the consensus client")
 	}
 
-	return client
+	return client, nil
 }
 
 func (c *Client) loadCurrentContext(ctx context.Context, currentSlot types.Slot, currentEpoch types.Epoch, slotsPerEpoch uint64) error {
@@ -94,27 +103,45 @@ func (c *Client) loadCurrentContext(ctx context.Context, currentSlot types.Slot,
 	return nil
 }
 
+func (c *Client) GetProposer(ctx context.Context, slot types.Slot) (*ValidatorInfo, error) {
+	val, ok := c.proposerCache.Get(slot)
+	if !ok {
+		return nil, fmt.Errorf("could not find proposer for slot %d", slot)
+	}
+	validator, ok := val.(ValidatorInfo)
+	if !ok {
+		return nil, fmt.Errorf("internal: proposer cache contains an unexpected type %T", val)
+	}
+	return &validator, nil
+}
+
+func (c *Client) GetExecutionHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
+	val, ok := c.executionCache.Get(slot)
+	if !ok {
+		return types.Hash{}, fmt.Errorf("could not find execution hash for slot %d", slot)
+	}
+	hash, ok := val.(types.Hash)
+	if !ok {
+		return types.Hash{}, fmt.Errorf("internal: execution cache contains an unexpected type %T", val)
+	}
+	return hash, nil
+}
+
 func (c *Client) GetParentHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
 	targetSlot := slot - 1
-	c.executionCacheMutex.RLock()
-	parentHash, ok := c.executionCache[targetSlot]
-	c.executionCacheMutex.RUnlock()
-	if !ok {
+	parentHash, err := c.GetExecutionHash(ctx, targetSlot)
+	if err != nil {
 		return c.FetchExecutionHash(ctx, targetSlot)
 	}
 	return parentHash, nil
 }
 
 func (c *Client) GetProposerPublicKey(ctx context.Context, slot types.Slot) (*types.PublicKey, error) {
-	c.proposerCacheMutex.RLock()
-	defer c.proposerCacheMutex.RUnlock()
-
-	validator, ok := c.proposerCache[slot]
-	if !ok {
+	validator, err := c.GetProposer(ctx, slot)
+	if err != nil {
 		// TODO consider fallback to grab the assignments for the missing epoch...
-		return nil, fmt.Errorf("missing proposer for slot %d", slot)
+		return nil, fmt.Errorf("missing proposer for slot %d: %v", slot, err)
 	}
-
 	return &validator.publicKey, nil
 }
 
@@ -128,14 +155,12 @@ func (c *Client) FetchProposers(ctx context.Context, epoch types.Epoch) error {
 	}
 
 	// TODO handle reorgs, etc.
-	c.proposerCacheMutex.Lock()
 	for _, duty := range proposerDuties.Data {
-		c.proposerCache[uint64(duty.Slot)] = ValidatorInfo{
+		c.proposerCache.Add(uint64(duty.Slot), ValidatorInfo{
 			publicKey: types.PublicKey(duty.Pubkey),
 			index:     uint64(duty.ValidatorIndex),
-		}
+		})
 	}
-	c.proposerCacheMutex.Unlock()
 
 	return nil
 }
@@ -143,14 +168,10 @@ func (c *Client) FetchProposers(ctx context.Context, epoch types.Epoch) error {
 func (c *Client) backFillExecutionHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
 	for i := slot; i > 0; i-- {
 		targetSlot := i - 1
-		c.executionCacheMutex.RLock()
-		executionHash, ok := c.executionCache[targetSlot]
-		c.executionCacheMutex.RUnlock()
-		if ok {
+		executionHash, err := c.GetExecutionHash(ctx, targetSlot)
+		if err == nil {
 			for i := targetSlot; i < slot; i++ {
-				c.executionCacheMutex.Lock()
-				c.executionCache[i+1] = executionHash
-				c.executionCacheMutex.Unlock()
+				c.executionCache.Add(i+1, executionHash)
 			}
 			return executionHash, nil
 		}
@@ -160,12 +181,10 @@ func (c *Client) backFillExecutionHash(ctx context.Context, slot types.Slot) (ty
 
 func (c *Client) FetchExecutionHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
 	// TODO handle reorgs, etc.
-	c.executionCacheMutex.Lock()
-	executionHash, ok := c.executionCache[slot]
-	if ok {
+	executionHash, err := c.GetExecutionHash(ctx, slot)
+	if err == nil {
 		return executionHash, nil
 	}
-	c.executionCacheMutex.Unlock()
 
 	blockID := eth2api.BlockIdSlot(slot)
 
@@ -186,9 +205,7 @@ func (c *Client) FetchExecutionHash(ctx context.Context, slot types.Slot) (types
 	executionHash = types.Hash(bellatrixBlock.Message.Body.ExecutionPayload.BlockHash)
 
 	// TODO handle reorgs, etc.
-	c.executionCacheMutex.Lock()
-	c.executionCache[slot] = executionHash
-	c.executionCacheMutex.Unlock()
+	c.executionCache.Add(slot, executionHash)
 
 	return executionHash, nil
 }
