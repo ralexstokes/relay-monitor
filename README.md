@@ -122,31 +122,41 @@ Example request:
 
 Exposes a summary of faults per relay.
 
-This response contains a map of relay public key to a mapping of observed fault counts.
+This response contains a map of relay public key to a mapping of observed fault counts. The response also contains the start and end epochs the observation window spans.
 
 The types of faults and their meaning can be found here: https://hackmd.io/A2uex3QFSfiaJJ9BKxw-XA?view#behavior-faults
 
 #### Optional query params:
 
 Query param: `start`, an unsigned 64-bit integer indicating the lower bound for an epoch to provide fault data for
-Query param: `stop`, an unsigned 64-bit integer indicating the upper bound for an epoch to provide fault data for.
+Query param: `end`, an unsigned 64-bit integer indicating the upper bound for an epoch to provide fault data for.
 
-NOTE: if only `start` (or `stop`) is provided then the response will be `256` epochs after (or before) the given parameter.
+NOTE: if only `start` (or `end`) is provided then the response will be `256` epochs after (or before) the given parameter.
 NOTE: if neither parameter is provided, the response will be `256` epochs behind from the current epoch, inclusive.
+
+#### Example request:
+
+`GET /api/v1/relay-monitor/faults?start=100`
 
 #### Example response:
 
 ```json
 {
-  "0x845bd072b7cd566f02faeb0a4033ce9399e42839ced64e8b2adcfc859ed1e8e1a5a293336a49feac6d9a5edb779be53a": {
-    "total_bids": 1153,
-    "malformed_bids": 0,
-    "consensus_invalid_bids": 1,
-    "payment_invalid_bids": 12,
-    "ignored_preferences_bids": 5,
-    "malformed_payloads": 0,
-    "consensus_invalid_payloads": 1,
-    "unavailable_payloads": 10
+  "span": {
+    "start_epoch": "100",
+    "end_epoch": "356",
+  },
+  "data": {
+    "0x845bd072b7cd566f02faeb0a4033ce9399e42839ced64e8b2adcfc859ed1e8e1a5a293336a49feac6d9a5edb779be53a": {
+      "total_bids": 1153,
+      "malformed_bids": 0,
+      "consensus_invalid_bids": 1,
+      "payment_invalid_bids": 12,
+      "ignored_preferences_bids": 5,
+      "malformed_payloads": 0,
+      "consensus_invalid_payloads": 1,
+      "unavailable_payloads": 10
+    }
   }
 }
 ```

@@ -35,7 +35,7 @@ func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan dat
 	}
 }
 
-func (a *Analyzer) GetFaults() FaultRecord {
+func (a *Analyzer) GetFaults(start, end types.Epoch) FaultRecord {
 	a.faultsLock.Lock()
 	defer a.faultsLock.Unlock()
 
