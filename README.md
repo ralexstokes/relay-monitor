@@ -94,124 +94,7 @@ Example request:
       "parent_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
       "state_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
       "body": {
-        "randao_reveal": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505",
-        "eth1_data": {
-          "deposit_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-          "deposit_count": "1",
-          "block_hash": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
-        },
-        "graffiti": "0xdeadbeefc0ffee",
-        "proposer_slashings": [
-          {
-            "signed_header_1": {
-              "message": {
-                "slot": "1",
-                "proposer_index": "1",
-                "parent_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-                "state_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-                "body_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
-              },
-              "signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"
-            },
-            "signed_header_2": {
-              "message": {
-                "slot": "1",
-                "proposer_index": "1",
-                "parent_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-                "state_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-                "body_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
-              },
-              "signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"
-            }
-          }
-        ],
-        "attester_slashings": [
-          {
-            "attestation_1": {
-              "attesting_indices": [
-                "1"
-              ],
-              "signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505",
-              "data": {
-                "slot": "1",
-                "index": "1",
-                "beacon_block_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-                "source": {
-                  "epoch": "1",
-                  "root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
-                },
-                "target": {
-                  "epoch": "1",
-                  "root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
-                }
-              }
-            },
-            "attestation_2": {
-              "attesting_indices": [
-                "1"
-              ],
-              "signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505",
-              "data": {
-                "slot": "1",
-                "index": "1",
-                "beacon_block_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-                "source": {
-                  "epoch": "1",
-                  "root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
-                },
-                "target": {
-                  "epoch": "1",
-                  "root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
-                }
-              }
-            }
-          }
-        ],
-        "attestations": [
-          {
-            "aggregation_bits": "0x01",
-            "signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505",
-            "data": {
-              "slot": "1",
-              "index": "1",
-              "beacon_block_root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-              "source": {
-                "epoch": "1",
-                "root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
-              },
-              "target": {
-                "epoch": "1",
-                "root": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
-              }
-            }
-          }
-        ],
-        "deposits": [
-          {
-            "proof": [
-              "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2"
-            ],
-            "data": {
-              "pubkey": "0x93247f2209abcacf57b75a51dafae777f9dd38bc7053d1af526f220a7489a6d3a2753e5f3e8b1cfe39b56f43611df74a",
-              "withdrawal_credentials": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
-              "amount": "1",
-              "signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"
-            }
-          }
-        ],
-        "voluntary_exits": [
-          {
-            "message": {
-              "epoch": "1",
-              "validator_index": "1"
-            },
-            "signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"
-          }
-        ],
-        "sync_aggregate": {
-          "sync_committee_bits": "0x01",
-          "sync_committee_signature": "0x1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505cc411d61252fb6cb3fa0017b679f8bb2305b26a285fa2737f175668d0dff91cc1b66ac1fb663c9bc59509846d6ec05345bd908eda73e670af888da41af171505"
-        },
+        ... fields omitted ...
         "execution_payload_header": {
           "parent_hash": "0xcf8e0d4e9587369b2301d0790347320302cc0943d5a1884560367e8208d920f2",
           "fee_recipient": "0xabcf8e0d4e9587369b2301d0790347320302cc09",
@@ -239,23 +122,41 @@ Example request:
 
 Exposes a summary of faults per relay.
 
-This response contains a map of relay public key to a mapping of observed fault counts.
+This response contains a map of relay public key to a mapping of observed fault counts. The response also contains the start and end epochs the observation window spans.
 
 The types of faults and their meaning can be found here: https://hackmd.io/A2uex3QFSfiaJJ9BKxw-XA?view#behavior-faults
 
-Example response:
+#### Optional query params:
+
+Query param: `start`, an unsigned 64-bit integer indicating the lower bound for an epoch to provide fault data for
+Query param: `end`, an unsigned 64-bit integer indicating the upper bound for an epoch to provide fault data for.
+
+NOTE: if only `start` (or `end`) is provided then the response will be `256` epochs after (or before) the given parameter.
+NOTE: if neither parameter is provided, the response will be `256` epochs behind from the current epoch, inclusive.
+
+#### Example request:
+
+`GET /api/v1/relay-monitor/faults?start=100`
+
+#### Example response:
 
 ```json
 {
-  "0x845bd072b7cd566f02faeb0a4033ce9399e42839ced64e8b2adcfc859ed1e8e1a5a293336a49feac6d9a5edb779be53a": {
-    "total_bids": 0,
-    "malformed_bids": 0,
-    "consensus_invalid_bids": 0,
-    "payment_invalid_bids": 0,
-    "ignored_preferences_bids": 0,
-    "malformed_payloads": 0,
-    "consensus_invalid_payloads": 0,
-    "unavailable_payloads": 0
+  "span": {
+    "start_epoch": "100",
+    "end_epoch": "356",
+  },
+  "data": {
+    "0x845bd072b7cd566f02faeb0a4033ce9399e42839ced64e8b2adcfc859ed1e8e1a5a293336a49feac6d9a5edb779be53a": {
+      "total_bids": 1153,
+      "malformed_bids": 0,
+      "consensus_invalid_bids": 1,
+      "payment_invalid_bids": 12,
+      "ignored_preferences_bids": 5,
+      "malformed_payloads": 0,
+      "consensus_invalid_payloads": 1,
+      "unavailable_payloads": 10
+    }
   }
 }
 ```
