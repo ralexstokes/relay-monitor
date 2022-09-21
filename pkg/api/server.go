@@ -7,8 +7,10 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/ralexstokes/relay-monitor/pkg/analysis"
+	"github.com/ralexstokes/relay-monitor/pkg/consensus"
 	"github.com/ralexstokes/relay-monitor/pkg/data"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 	"go.uber.org/zap"
@@ -43,14 +45,16 @@ type Server struct {
 
 	analyzer *analysis.Analyzer
 	events   chan<- data.Event
+	clock    *consensus.Clock
 }
 
-func New(config *Config, logger *zap.Logger, analyzer *analysis.Analyzer, events chan<- data.Event) *Server {
+func New(config *Config, logger *zap.Logger, analyzer *analysis.Analyzer, events chan<- data.Event, clock *consensus.Clock) *Server {
 	return &Server{
 		config:   config,
 		logger:   logger,
 		analyzer: analyzer,
 		events:   events,
+		clock:    clock,
 	}
 }
 
@@ -92,6 +96,12 @@ func computeSpanFromRequest(startEpochRequest, endEpochRequest *types.Epoch, tar
 	return startEpoch, endEpoch
 }
 
+func (s *Server) currentEpoch() types.Epoch {
+	now := time.Now().Unix()
+	slot := s.clock.CurrentSlot(now)
+	return s.clock.EpochForSlot(slot)
+}
+
 func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 	logger := s.logger.Sugar()
 
@@ -123,8 +133,7 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 		endEpochRequest = &epoch
 	}
 
-	// TODO implement current epoch
-	var currentEpoch types.Epoch
+	currentEpoch := s.currentEpoch()
 	startEpoch, endEpoch := computeSpanFromRequest(startEpochRequest, endEpochRequest, DefaultEpochSpanForFaultsWindow, currentEpoch)
 	faults := s.analyzer.GetFaults(startEpoch, endEpoch)
 
