@@ -76,7 +76,7 @@ func (a *Analyzer) processValidatorRegistration(ctx context.Context, event data.
 
 	registrations := event.Registrations
 	for _, registration := range registrations {
-		err := a.store.PutValidatorRegistration(ctx, registration)
+		err := a.store.PutValidatorRegistration(ctx, &registration)
 		if err != nil {
 			logger.Warn("could not store validator registration: %+v", registration)
 			return
