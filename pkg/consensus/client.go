@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/protolambda/eth2api"
 	"github.com/protolambda/eth2api/client/beaconapi"
 	"github.com/protolambda/eth2api/client/validatorapi"
