@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/protolambda/eth2api"
 	"github.com/protolambda/eth2api/client/beaconapi"
 	"github.com/protolambda/eth2api/client/validatorapi"
@@ -33,8 +34,12 @@ type Client struct {
 	logger *zap.Logger
 	client *eth2api.Eth2HttpClient
 
-	proposerCache  *lru.Cache
+	// slot -> ValidatorInfo
+	proposerCache *lru.Cache
+	// slot -> Hash
 	executionCache *lru.Cache
+	// publicKey -> Validator
+	validatorCache *lru.Cache
 }
 
 func NewClient(ctx context.Context, endpoint string, logger *zap.Logger, currentSlot types.Slot, currentEpoch types.Epoch, slotsPerEpoch uint64) (*Client, error) {
@@ -53,7 +58,13 @@ func NewClient(ctx context.Context, endpoint string, logger *zap.Logger, current
 	if err != nil {
 		return nil, err
 	}
+
 	executionCache, err := lru.New(cacheSize)
+	if err != nil {
+		return nil, err
+	}
+
+	validatorCache, err := lru.New(cacheSize)
 	if err != nil {
 		return nil, err
 	}
@@ -63,6 +74,7 @@ func NewClient(ctx context.Context, endpoint string, logger *zap.Logger, current
 		client:         httpClient,
 		proposerCache:  proposerCache,
 		executionCache: executionCache,
+		validatorCache: validatorCache,
 	}
 
 	err = client.loadCurrentContext(ctx, currentSlot, currentEpoch, slotsPerEpoch)
@@ -100,10 +112,15 @@ func (c *Client) loadCurrentContext(ctx context.Context, currentSlot types.Slot,
 		logger.Warnf("could not load consensus state for epoch %d: %v", nextEpoch, err)
 	}
 
+	err = c.FetchValidators(ctx)
+	if err != nil {
+		logger.Warnf("could not load validators: %v", err)
+	}
+
 	return nil
 }
 
-func (c *Client) GetProposer(ctx context.Context, slot types.Slot) (*ValidatorInfo, error) {
+func (c *Client) GetProposer(slot types.Slot) (*ValidatorInfo, error) {
 	val, ok := c.proposerCache.Get(slot)
 	if !ok {
 		return nil, fmt.Errorf("could not find proposer for slot %d", slot)
@@ -115,7 +132,7 @@ func (c *Client) GetProposer(ctx context.Context, slot types.Slot) (*ValidatorIn
 	return &validator, nil
 }
 
-func (c *Client) GetExecutionHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
+func (c *Client) GetExecutionHash(slot types.Slot) (types.Hash, error) {
 	val, ok := c.executionCache.Get(slot)
 	if !ok {
 		return types.Hash{}, fmt.Errorf("could not find execution hash for slot %d", slot)
@@ -127,9 +144,21 @@ func (c *Client) GetExecutionHash(ctx context.Context, slot types.Slot) (types.H
 	return hash, nil
 }
 
+func (c *Client) GetValidator(publicKey *types.PublicKey) (*eth2api.ValidatorResponse, error) {
+	val, ok := c.validatorCache.Get(publicKey)
+	if !ok {
+		return nil, fmt.Errorf("missing validator entry for public key %s", publicKey)
+	}
+	validator, ok := val.(eth2api.ValidatorResponse)
+	if !ok {
+		return nil, fmt.Errorf("internal: validator cache contains an unexpected type %T", val)
+	}
+	return &validator, nil
+}
+
 func (c *Client) GetParentHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
 	targetSlot := slot - 1
-	parentHash, err := c.GetExecutionHash(ctx, targetSlot)
+	parentHash, err := c.GetExecutionHash(targetSlot)
 	if err != nil {
 		return c.FetchExecutionHash(ctx, targetSlot)
 	}
@@ -137,7 +166,7 @@ func (c *Client) GetParentHash(ctx context.Context, slot types.Slot) (types.Hash
 }
 
 func (c *Client) GetProposerPublicKey(ctx context.Context, slot types.Slot) (*types.PublicKey, error) {
-	validator, err := c.GetProposer(ctx, slot)
+	validator, err := c.GetProposer(slot)
 	if err != nil {
 		// TODO consider fallback to grab the assignments for the missing epoch...
 		return nil, fmt.Errorf("missing proposer for slot %d: %v", slot, err)
@@ -149,7 +178,7 @@ func (c *Client) FetchProposers(ctx context.Context, epoch types.Epoch) error {
 	var proposerDuties eth2api.DependentProposerDuty
 	syncing, err := validatorapi.ProposerDuties(ctx, c.client, common.Epoch(epoch), &proposerDuties)
 	if syncing {
-		return fmt.Errorf("could not Fetch proposal duties in epoch %d because node is syncing", epoch)
+		return fmt.Errorf("could not fetch proposal duties in epoch %d because node is syncing", epoch)
 	} else if err != nil {
 		return err
 	}
@@ -165,10 +194,10 @@ func (c *Client) FetchProposers(ctx context.Context, epoch types.Epoch) error {
 	return nil
 }
 
-func (c *Client) backFillExecutionHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
+func (c *Client) backFillExecutionHash(slot types.Slot) (types.Hash, error) {
 	for i := slot; i > 0; i-- {
 		targetSlot := i - 1
-		executionHash, err := c.GetExecutionHash(ctx, targetSlot)
+		executionHash, err := c.GetExecutionHash(targetSlot)
 		if err == nil {
 			for i := targetSlot; i < slot; i++ {
 				c.executionCache.Add(i+1, executionHash)
@@ -181,7 +210,7 @@ func (c *Client) backFillExecutionHash(ctx context.Context, slot types.Slot) (ty
 
 func (c *Client) FetchExecutionHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
 	// TODO handle reorgs, etc.
-	executionHash, err := c.GetExecutionHash(ctx, slot)
+	executionHash, err := c.GetExecutionHash(slot)
 	if err == nil {
 		return executionHash, nil
 	}
@@ -193,7 +222,7 @@ func (c *Client) FetchExecutionHash(ctx context.Context, slot types.Slot) (types
 	if !exists {
 		// TODO move search to `GetParentHash`
 		// TODO also instantiate with first execution hash...
-		return c.backFillExecutionHash(ctx, slot)
+		return c.backFillExecutionHash(slot)
 	} else if err != nil {
 		return types.Hash{}, err
 	}
@@ -244,4 +273,38 @@ func (c *Client) StreamHeads(ctx context.Context) <-chan types.Coordinate {
 		}
 	}()
 	return ch
+}
+
+// TODO handle reorgs
+func (c *Client) FetchValidators(ctx context.Context) error {
+	var response []eth2api.ValidatorResponse
+	exists, err := beaconapi.StateValidators(ctx, c.client, eth2api.StateHead, nil, nil, &response)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("could not fetch validators from remote endpoint because they do not exist")
+	}
+
+	for _, validator := range response {
+		publicKey := validator.Validator.Pubkey
+		c.validatorCache.Add(publicKey, validator)
+	}
+
+	return nil
+}
+
+func (c *Client) GetValidatorStatus(publicKey *types.PublicKey) (ValidatorStatus, error) {
+	validator, err := c.GetValidator(publicKey)
+	if err != nil {
+		return StatusValidatorUnknown, err
+	}
+	validatorStatus := string(validator.Status)
+	if strings.Contains(validatorStatus, "active") {
+		return StatusValidatorActive, nil
+	} else if strings.Contains(validatorStatus, "pending") {
+		return StatusValidatorPending, nil
+	} else {
+		return StatusValidatorUnknown, nil
+	}
 }

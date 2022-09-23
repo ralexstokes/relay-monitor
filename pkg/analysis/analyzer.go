@@ -72,11 +72,9 @@ func (a *Analyzer) processBid(ctx context.Context, event *data.BidEvent) {
 func (a *Analyzer) processValidatorRegistration(ctx context.Context, event data.ValidatorRegistrationEvent) {
 	logger := a.logger.Sugar()
 
-	// TODO validations on data
-
 	registrations := event.Registrations
 	for _, registration := range registrations {
-		err := a.store.PutValidatorRegistration(ctx, registration)
+		err := a.store.PutValidatorRegistration(ctx, &registration)
 		if err != nil {
 			logger.Warn("could not store validator registration: %+v", registration)
 			return

@@ -11,7 +11,9 @@ import (
 
 	"github.com/ralexstokes/relay-monitor/pkg/analysis"
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
+	"github.com/ralexstokes/relay-monitor/pkg/crypto"
 	"github.com/ralexstokes/relay-monitor/pkg/data"
+	"github.com/ralexstokes/relay-monitor/pkg/store"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 	"go.uber.org/zap"
 )
@@ -43,18 +45,21 @@ type Server struct {
 	config *Config
 	logger *zap.Logger
 
-	analyzer *analysis.Analyzer
-	events   chan<- data.Event
-	clock    *consensus.Clock
+	analyzer        *analysis.Analyzer
+	events          chan<- data.Event
+	clock           *consensus.Clock
+	store           store.Storer
+	consensusClient *consensus.Client
 }
 
-func New(config *Config, logger *zap.Logger, analyzer *analysis.Analyzer, events chan<- data.Event, clock *consensus.Clock) *Server {
+func New(config *Config, logger *zap.Logger, analyzer *analysis.Analyzer, events chan<- data.Event, clock *consensus.Clock, consensusClient *consensus.Client) *Server {
 	return &Server{
-		config:   config,
-		logger:   logger,
-		analyzer: analyzer,
-		events:   events,
-		clock:    clock,
+		config:          config,
+		logger:          logger,
+		analyzer:        analyzer,
+		events:          events,
+		clock:           clock,
+		consensusClient: consensusClient,
 	}
 }
 
@@ -155,8 +160,77 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) validateRegistrationTimestamp(registration, currentRegistration *types.SignedValidatorRegistration) error {
+	timestamp := registration.Message.Timestamp
+	deadline := time.Now().Add(10 * time.Second).Unix()
+	if timestamp >= uint64(deadline) {
+		return fmt.Errorf("invalid registration: too far in future, %+v", registration)
+	}
+
+	if currentRegistration != nil {
+		lastTimestamp := currentRegistration.Message.Timestamp
+		if timestamp < lastTimestamp {
+			return fmt.Errorf("invalid registration: more recent successful registration, %+v", registration)
+		}
+	}
+
+	return nil
+}
+
+func (s *Server) validateRegistrationSignature(registration *types.SignedValidatorRegistration) error {
+	msg := registration.Message
+	valid, err := crypto.VerifySignature(msg, crypto.BuilderDomain, msg.Pubkey[:], registration.Signature[:])
+	if err != nil {
+		return err
+	}
+	if !valid {
+		return fmt.Errorf("signature invalid for validator registration %+v", registration)
+	}
+	return nil
+}
+
+func (s *Server) validateRegistrationValidatorStatus(registration *types.SignedValidatorRegistration) error {
+	publicKey := registration.Message.Pubkey
+	status, err := s.consensusClient.GetValidatorStatus(&publicKey)
+	if err != nil {
+		return err
+	}
+
+	switch status {
+	case consensus.StatusValidatorActive, consensus.StatusValidatorPending:
+		return nil
+	default:
+		return fmt.Errorf("invalid registration: validator lifecycle status %s is not `active` or `pending`, %+v", status, registration)
+	}
+}
+
+func (s *Server) validateRegistration(registration, currentRegistration *types.SignedValidatorRegistration) error {
+	err := s.validateRegistrationTimestamp(registration, currentRegistration)
+	if err != nil {
+		return err
+	}
+
+	err = s.validateRegistrationSignature(registration)
+	if err != nil {
+		return err
+	}
+
+	err = s.validateRegistrationValidatorStatus(registration)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type apiError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
 func (s *Server) handleRegisterValidator(w http.ResponseWriter, r *http.Request) {
 	logger := s.logger.Sugar()
+	ctx := context.Background()
 
 	var registrations []types.SignedValidatorRegistration
 	err := json.NewDecoder(r.Body).Decode(&registrations)
@@ -166,7 +240,34 @@ func (s *Server) handleRegisterValidator(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	logger.Debugw("got validator registration", "data", registrations)
+	for _, registration := range registrations {
+		currentRegistration, err := store.GetLatestValidatorRegistration(ctx, s.store, &registration.Message.Pubkey)
+		if err != nil {
+			logger.Warnw("could not get registrations for validator", "error", err, "registration", registration)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		err = s.validateRegistration(&registration, currentRegistration)
+		if err != nil {
+			logger.Warnw("invalid validator registration in batch", "registration", registration, "error", err)
+			w.WriteHeader(http.StatusBadRequest)
+			w.Header().Set("Content-Type", "application/json")
+			response := apiError{
+				Code:    http.StatusBadRequest,
+				Message: err.Error(),
+			}
+			encoder := json.NewEncoder(w)
+			err := encoder.Encode(response)
+			if err != nil {
+				logger.Warnw("could not send API error", "error", err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			return
+		}
+	}
+
+	logger.Debugw("got validator registrations", "data", registrations)
 
 	payload := data.ValidatorRegistrationEvent{
 		Registrations: registrations,
@@ -174,8 +275,6 @@ func (s *Server) handleRegisterValidator(w http.ResponseWriter, r *http.Request)
 	// TODO what if this is full?
 	s.events <- data.Event{Payload: payload}
 
-	// TODO API says we validate the data, but this is pushed to another task
-	// block until validations complete?
 	w.WriteHeader(http.StatusOK)
 }
 
