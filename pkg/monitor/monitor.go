@@ -65,7 +65,7 @@ func New(ctx context.Context, config *Config, zapLogger *zap.Logger) (*Monitor, 
 	collector := data.NewCollector(zapLogger, relays, clock, consensusClient, events)
 	store := store.NewMemoryStore()
 	analyzer := analysis.NewAnalyzer(zapLogger, relays, events, store)
-	apiServer := api.New(config.Api, zapLogger, analyzer, events, clock)
+	apiServer := api.New(config.Api, zapLogger, analyzer, events, clock, consensusClient)
 	return &Monitor{
 		logger:    zapLogger,
 		api:       apiServer,

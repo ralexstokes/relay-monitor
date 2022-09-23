@@ -116,9 +116,28 @@ func (c *Collector) syncProposers(ctx context.Context) {
 	}
 }
 
+func (c *Collector) syncValidators(ctx context.Context) {
+	logger := c.logger.Sugar()
+
+	epochs := c.clock.TickEpochs(ctx)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case epoch := <-epochs:
+			err := c.consensusClient.FetchValidators(ctx)
+			if err != nil {
+				logger.Warnf("could not load validators in epoch %d: %v", epoch, err)
+			}
+		}
+	}
+}
+
+// TODO refactor this into a separate component as the list of duties is growing outside the "collector" abstraction
 func (c *Collector) collectConsensusData(ctx context.Context) {
 	go c.syncExecutionHeads(ctx)
 	go c.syncProposers(ctx)
+	go c.syncValidators(ctx)
 }
 
 func (c *Collector) Run(ctx context.Context) error {
