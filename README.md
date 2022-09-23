@@ -130,8 +130,10 @@ The types of faults and their meaning can be found here: https://hackmd.io/A2uex
 
 Query param: `start`, an unsigned 64-bit integer indicating the lower bound for an epoch to provide fault data for
 Query param: `end`, an unsigned 64-bit integer indicating the upper bound for an epoch to provide fault data for.
+Query param: `window`, an unsigned 64-bit integer indicating the size of the window between each monitoring request.
 
 NOTE: if only `start` (or `end`) is provided then the response will be `256` epochs after (or before) the given parameter.
+NOTE: if only `start` (or `end`) is provided with the `window` parameter then the response will be `window` (the provided value) epochs after (or before) the given parameter.
 NOTE: if neither parameter is provided, the response will be `256` epochs behind from the current epoch, inclusive.
 
 #### Example request:

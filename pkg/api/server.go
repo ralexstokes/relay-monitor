@@ -138,8 +138,22 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 		endEpochRequest = &epoch
 	}
 
+	epochSpanForFaultsWindow := q.Get("window")
+	var epochSpanRequest types.Epoch
+	if epochSpanForFaultsWindow != "" {
+		epochSpanValue, err := strconv.ParseUint(epochSpanForFaultsWindow, 10, 64)
+		if err != nil {
+			logger.Errorw("error parsing query param for faults request", "err", err, "epochSpan", epochSpanForFaultsWindow)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		epochSpanRequest = types.Epoch(epochSpanValue)
+	} else {
+		epochSpanRequest = types.Epoch(DefaultEpochSpanForFaultsWindow)
+	}
+
 	currentEpoch := s.currentEpoch()
-	startEpoch, endEpoch := computeSpanFromRequest(startEpochRequest, endEpochRequest, DefaultEpochSpanForFaultsWindow, currentEpoch)
+	startEpoch, endEpoch := computeSpanFromRequest(startEpochRequest, endEpochRequest, epochSpanRequest, currentEpoch)
 	faults := s.analyzer.GetFaults(startEpoch, endEpoch)
 
 	w.Header().Set("Content-Type", "application/json")
