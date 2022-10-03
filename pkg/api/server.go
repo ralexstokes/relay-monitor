@@ -15,6 +15,7 @@ import (
 	"github.com/ralexstokes/relay-monitor/pkg/data"
 	"github.com/ralexstokes/relay-monitor/pkg/store"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
+	"github.com/umbracle/go-eth-consensus/bls"
 	"go.uber.org/zap"
 )
 
@@ -178,8 +179,11 @@ func (s *Server) validateRegistrationTimestamp(registration, currentRegistration
 }
 
 func (s *Server) validateRegistrationSignature(registration *types.SignedValidatorRegistration) error {
-	msg := registration.Message
-	valid, err := crypto.VerifySignature(msg, crypto.BuilderDomain, msg.Pubkey[:], registration.Signature[:])
+	var pub *bls.PublicKey
+	if err := pub.Deserialize(registration.Message.Pubkey[:]); err != nil {
+		return err
+	}
+	valid, err := crypto.VerifySignature(pub, registration.Message, crypto.BuilderDomain, registration.Signature[:])
 	if err != nil {
 		return err
 	}

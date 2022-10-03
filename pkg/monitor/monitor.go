@@ -33,9 +33,13 @@ func parseRelaysFromEndpoint(logger *zap.SugaredLogger, relayEndpoints []string)
 			continue
 		}
 
-		err = relay.GetStatus()
+		status, err := relay.GetStatus()
 		if err != nil {
 			logger.Warnf("relay %s has status error: %v", endpoint, err)
+			continue
+		}
+		if !status {
+			logger.Warnf("relay %s is not healthy", endpoint)
 			continue
 		}
 

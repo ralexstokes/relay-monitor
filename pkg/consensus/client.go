@@ -2,22 +2,16 @@ package consensus
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"net/http"
-	"strconv"
 	"strings"
-	"time"
 
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/protolambda/eth2api"
-	"github.com/protolambda/eth2api/client/beaconapi"
-	"github.com/protolambda/eth2api/client/validatorapi"
-	"github.com/protolambda/zrnt/eth2/beacon/bellatrix"
-	"github.com/protolambda/zrnt/eth2/beacon/common"
-	"github.com/r3labs/sse/v2"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 	"go.uber.org/zap"
+
+	consensus "github.com/umbracle/go-eth-consensus"
+	"github.com/umbracle/go-eth-consensus/http"
 )
 
 const (
@@ -32,7 +26,7 @@ type ValidatorInfo struct {
 
 type Client struct {
 	logger *zap.Logger
-	client *eth2api.Eth2HttpClient
+	client *http.Client
 
 	// slot -> ValidatorInfo
 	proposerCache *lru.Cache
@@ -43,17 +37,6 @@ type Client struct {
 }
 
 func NewClient(ctx context.Context, endpoint string, logger *zap.Logger, currentSlot types.Slot, currentEpoch types.Epoch, slotsPerEpoch uint64) (*Client, error) {
-	httpClient := &eth2api.Eth2HttpClient{
-		Addr: endpoint,
-		Cli: &http.Client{
-			Transport: &http.Transport{
-				MaxIdleConnsPerHost: 128,
-			},
-			Timeout: clientTimeoutSec * time.Second,
-		},
-		Codec: eth2api.JSONCodec{},
-	}
-
 	proposerCache, err := lru.New(cacheSize)
 	if err != nil {
 		return nil, err
@@ -71,7 +54,6 @@ func NewClient(ctx context.Context, endpoint string, logger *zap.Logger, current
 
 	client := &Client{
 		logger:         logger,
-		client:         httpClient,
 		proposerCache:  proposerCache,
 		executionCache: executionCache,
 		validatorCache: validatorCache,
@@ -144,16 +126,16 @@ func (c *Client) GetExecutionHash(slot types.Slot) (types.Hash, error) {
 	return hash, nil
 }
 
-func (c *Client) GetValidator(publicKey *types.PublicKey) (*eth2api.ValidatorResponse, error) {
+func (c *Client) GetValidator(publicKey *types.PublicKey) (*http.Validator, error) {
 	val, ok := c.validatorCache.Get(publicKey)
 	if !ok {
 		return nil, fmt.Errorf("missing validator entry for public key %s", publicKey)
 	}
-	validator, ok := val.(eth2api.ValidatorResponse)
+	validator, ok := val.(*http.Validator)
 	if !ok {
 		return nil, fmt.Errorf("internal: validator cache contains an unexpected type %T", val)
 	}
-	return &validator, nil
+	return validator, nil
 }
 
 func (c *Client) GetParentHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
@@ -175,19 +157,16 @@ func (c *Client) GetProposerPublicKey(ctx context.Context, slot types.Slot) (*ty
 }
 
 func (c *Client) FetchProposers(ctx context.Context, epoch types.Epoch) error {
-	var proposerDuties eth2api.DependentProposerDuty
-	syncing, err := validatorapi.ProposerDuties(ctx, c.client, common.Epoch(epoch), &proposerDuties)
-	if syncing {
-		return fmt.Errorf("could not fetch proposal duties in epoch %d because node is syncing", epoch)
-	} else if err != nil {
+	duties, err := c.client.Validator().GetProposerDuties(epoch)
+	if err != nil {
 		return err
 	}
 
 	// TODO handle reorgs, etc.
-	for _, duty := range proposerDuties.Data {
+	for _, duty := range duties {
 		c.proposerCache.Add(uint64(duty.Slot), ValidatorInfo{
-			publicKey: types.PublicKey(duty.Pubkey),
-			index:     uint64(duty.ValidatorIndex),
+			// publicKey: types.PublicKey(duty.Pubkey), TODO
+			index: uint64(duty.ValidatorIndex),
 		})
 	}
 
@@ -215,23 +194,17 @@ func (c *Client) FetchExecutionHash(ctx context.Context, slot types.Slot) (types
 		return executionHash, nil
 	}
 
-	blockID := eth2api.BlockIdSlot(slot)
-
-	var signedBeaconBlock eth2api.VersionedSignedBeaconBlock
-	exists, err := beaconapi.BlockV2(ctx, c.client, blockID, &signedBeaconBlock)
-	if !exists {
-		// TODO move search to `GetParentHash`
-		// TODO also instantiate with first execution hash...
-		return c.backFillExecutionHash(slot)
-	} else if err != nil {
-		return types.Hash{}, err
+	var bellatrixBlock consensus.BeaconBlockBellatrix
+	if _, err := c.client.Beacon().GetBlock(http.Slot(slot), &bellatrixBlock); err != nil {
+		if errors.Is(err, http.ErrorNotFound) {
+			// TODO move search to `GetParentHash`
+			// TODO also instantiate with first execution hash...
+			return c.backFillExecutionHash(slot) // TODO
+		}
+		return types.Hash{}, nil
 	}
 
-	bellatrixBlock, ok := signedBeaconBlock.Data.(*bellatrix.SignedBeaconBlock)
-	if !ok {
-		return types.Hash{}, fmt.Errorf("could not parse block %s", signedBeaconBlock)
-	}
-	executionHash = types.Hash(bellatrixBlock.Message.Body.ExecutionPayload.BlockHash)
+	executionHash = types.Hash(bellatrixBlock.Body.ExecutionPayload.BlockHash)
 
 	// TODO handle reorgs, etc.
 	c.executionCache.Add(slot, executionHash)
@@ -239,58 +212,30 @@ func (c *Client) FetchExecutionHash(ctx context.Context, slot types.Slot) (types
 	return executionHash, nil
 }
 
-type headEvent struct {
-	Slot  string     `json:"slot"`
-	Block types.Root `json:"block"`
-}
-
 func (c *Client) StreamHeads(ctx context.Context) <-chan types.Coordinate {
-	logger := c.logger.Sugar()
-
-	sseClient := sse.NewClient(c.client.Addr + "/eth/v1/events?topics=head")
 	ch := make(chan types.Coordinate, 1)
-	go func() {
-		err := sseClient.SubscribeRawWithContext(ctx, func(msg *sse.Event) {
-			var event headEvent
-			err := json.Unmarshal(msg.Data, &event)
-			if err != nil {
-				logger.Warnf("could not unmarshal `head` node event: %v", err)
-				return
-			}
-			slot, err := strconv.Atoi(event.Slot)
-			if err != nil {
-				logger.Warnf("could not unmarshal slot from `head` node event: %v", err)
-				return
-			}
-			head := types.Coordinate{
-				Slot: types.Slot(slot),
-				Root: event.Block,
-			}
-			ch <- head
-		})
-		if err != nil {
-			logger.Errorw("could not subscribe to head event", "error", err)
+	c.client.Events(ctx, []string{"head"}, func(obj interface{}) {
+		event := obj.(*http.HeadEvent)
+
+		head := types.Coordinate{
+			Slot: event.Slot,
+			Root: event.Block,
 		}
-	}()
+		ch <- head
+	})
 	return ch
 }
 
 // TODO handle reorgs
 func (c *Client) FetchValidators(ctx context.Context) error {
-	var response []eth2api.ValidatorResponse
-	exists, err := beaconapi.StateValidators(ctx, c.client, eth2api.StateHead, nil, nil, &response)
+	validators, err := c.client.Beacon().GetValidators(http.Head)
 	if err != nil {
 		return err
 	}
-	if !exists {
-		return fmt.Errorf("could not fetch validators from remote endpoint because they do not exist")
-	}
-
-	for _, validator := range response {
-		publicKey := validator.Validator.Pubkey
+	for _, validator := range validators {
+		publicKey := validator.Validator.PubKey
 		c.validatorCache.Add(publicKey, validator)
 	}
-
 	return nil
 }
 
