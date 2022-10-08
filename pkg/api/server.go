@@ -138,8 +138,8 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 		endEpochRequest = &epoch
 	}
 
+	epochSpanRequest := types.Epoch(DefaultEpochSpanForFaultsWindow)
 	epochSpanForFaultsWindow := q.Get("window")
-	var epochSpanRequest types.Epoch
 	if epochSpanForFaultsWindow != "" {
 		epochSpanValue, err := strconv.ParseUint(epochSpanForFaultsWindow, 10, 64)
 		if err != nil {
@@ -148,8 +148,6 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		epochSpanRequest = types.Epoch(epochSpanValue)
-	} else {
-		epochSpanRequest = types.Epoch(DefaultEpochSpanForFaultsWindow)
 	}
 
 	currentEpoch := s.currentEpoch()
