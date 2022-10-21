@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	clientTimeoutSec = 5
+	clientTimeoutSec = 30
 	cacheSize        = 128
 )
 
