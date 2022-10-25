@@ -16,7 +16,7 @@ Every other required information is given in the configuration, e.g. `config.exa
 
 ## Operation
 
-`$ go run ./cmd/relay-monitor/main.go -config example.config`
+`$ go run ./cmd/relay-monitor/main.go -config config.example.yaml`
 
 ## Implementation
 
