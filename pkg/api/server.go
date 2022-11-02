@@ -20,9 +20,9 @@ import (
 
 const (
 	methodNotSupported              = "method not supported"
-	GetFaultEndpoint                = "/api/v1/relay-monitor/faults"
+	GetFaultEndpoint                = "/monitor/v1/faults"
 	RegisterValidatorEndpoint       = "/eth/v1/builder/validators"
-	PostAuctionTranscriptEndpoint   = "/api/v1/relay-monitor/transcript"
+	PostAuctionTranscriptEndpoint   = "/monitor/v1/transcript"
 	DefaultEpochSpanForFaultsWindow = 256
 )
 
