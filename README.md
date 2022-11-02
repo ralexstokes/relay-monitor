@@ -50,7 +50,7 @@ Expose the `registerValidator` endpoint from the `builder-specs` APIs to accept 
 
 See the [definition from the builder specs](https://ethereum.github.io/builder-specs/#/Builder/registerValidator) for more information.
 
-### POST `/api/v1/relay-monitor/transcript`
+### POST `/monitor/v1/transcript`
 
 Accept complete transcripts from proposers to verify the proposer's leg of the auction was performed correctly.
 
@@ -118,7 +118,7 @@ Example request:
 }
 ```
 
-### GET `/api/v1/relay-monitor/faults`
+### GET `/monitor/v1/faults`
 
 Exposes a summary of faults per relay.
 
@@ -137,7 +137,7 @@ NOTE: if neither parameter is provided, the response will be `256` epochs behind
 
 #### Example request:
 
-`GET /api/v1/relay-monitor/faults?start=100`
+`GET /monitor/v1/faults?start=100`
 
 #### Example response:
 
