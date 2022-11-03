@@ -5,37 +5,25 @@ import (
 	"time"
 
 	"github.com/ralexstokes/relay-monitor/pkg/types"
+	"github.com/umbracle/go-eth-consensus/chaintime"
 )
 
 type Clock struct {
-	genesisTime    uint64
-	secondsPerSlot uint64
-	slotsPerEpoch  uint64
+	chaintime *chaintime.Chaintime
 }
 
 func NewClock(genesisTime, secondsPerSlot, slotsPerEpoch uint64) *Clock {
 	return &Clock{
-		genesisTime:    genesisTime,
-		secondsPerSlot: secondsPerSlot,
-		slotsPerEpoch:  slotsPerEpoch,
+		chaintime: chaintime.New(time.Time{}, secondsPerSlot, slotsPerEpoch),
 	}
-}
-
-func (c *Clock) slotInSeconds(slot types.Slot) int64 {
-	return int64(slot*c.secondsPerSlot + c.genesisTime)
 }
 
 func (c *Clock) CurrentSlot(currentTime int64) types.Slot {
-	diff := currentTime - int64(c.genesisTime)
-	// TODO better handling of pre-genesis
-	if diff < 0 {
-		return 0
-	}
-	return types.Slot(diff / int64(c.secondsPerSlot))
+	return c.chaintime.CurrentSlot().Number
 }
 
 func (c *Clock) EpochForSlot(slot types.Slot) types.Epoch {
-	return slot / c.slotsPerEpoch
+	return c.chaintime.Slot(slot).Epoch
 }
 
 func (c *Clock) TickSlots(ctx context.Context) chan types.Slot {
@@ -49,13 +37,12 @@ func (c *Clock) TickSlots(ctx context.Context) chan types.Slot {
 				return
 			default:
 			}
-			now := time.Now().Unix()
-			currentSlot := c.CurrentSlot(now)
-			ch <- currentSlot
-			nextSlot := currentSlot + 1
-			nextSlotStart := c.slotInSeconds(nextSlot)
-			duration := time.Duration(nextSlotStart - now)
-			time.Sleep(duration * time.Second)
+
+			slot := c.chaintime.CurrentSlot()
+			ch <- slot.Number
+
+			nextSlot := c.chaintime.Slot(slot.Number + 1)
+			<-nextSlot.C().C
 		}
 	}()
 	return ch
@@ -64,16 +51,12 @@ func (c *Clock) TickSlots(ctx context.Context) chan types.Slot {
 func (c *Clock) TickEpochs(ctx context.Context) chan types.Epoch {
 	ch := make(chan types.Epoch, 1)
 	go func() {
-		slots := c.TickSlots(ctx)
-		currentSlot := <-slots
-		currentEpoch := currentSlot / c.slotsPerEpoch
-		ch <- currentEpoch
-		for slot := range slots {
-			epoch := slot / c.slotsPerEpoch
-			if epoch > currentEpoch {
-				currentEpoch = epoch
-				ch <- currentEpoch
-			}
+		for {
+			epoch := c.chaintime.CurrentEpoch()
+			ch <- epoch.Number
+
+			nextEpoch := c.chaintime.Epoch(epoch.Number + 1)
+			<-nextEpoch.C().C
 		}
 	}()
 	return ch

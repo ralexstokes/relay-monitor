@@ -2,10 +2,12 @@ package data
 
 import (
 	"context"
+	"errors"
 
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
+	"github.com/umbracle/go-eth-consensus/http"
 	"go.uber.org/zap"
 )
 
@@ -36,11 +38,11 @@ func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Clie
 	if err != nil {
 		return nil, err
 	}
-	bid, exists, err := relay.GetBid(slot, parentHash, *publicKey)
+	bid, err := relay.GetBid(slot, parentHash, *publicKey)
 	if err != nil {
 		return nil, err
 	}
-	if !exists {
+	if errors.Is(err, http.ErrorNotFound) {
 		return nil, nil
 	}
 	bidCtx := types.BidContext{

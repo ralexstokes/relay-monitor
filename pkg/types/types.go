@@ -1,7 +1,8 @@
 package types
 
 import (
-	"github.com/flashbots/go-boost-utils/types"
+	consensus "github.com/umbracle/go-eth-consensus"
+	"github.com/umbracle/go-eth-consensus/http"
 )
 
 type (
@@ -9,13 +10,13 @@ type (
 	Epoch = uint64
 )
 
-type PublicKey = types.PublicKey
+type PublicKey = [48]byte
 
-type Hash = types.Hash
+type Hash = [32]byte
 
-type Bid = types.SignedBuilderBid
+type Bid = http.SignedBuilderBid
 
-type Root = types.Root
+type Root = [32]byte
 
 type ValidatorIndex = uint64
 
@@ -24,11 +25,11 @@ type Coordinate struct {
 	Root Root
 }
 
-type SignedValidatorRegistration = types.SignedValidatorRegistration
+type SignedValidatorRegistration = http.SignedValidatorRegistration
 
 type AuctionTranscript struct {
-	Bid        Bid                            `json:"bid"`
-	Acceptance types.SignedBlindedBeaconBlock `json:"acceptance"`
+	Bid        Bid                                `json:"bid"`
+	Acceptance consensus.SignedBlindedBeaconBlock `json:"acceptance"`
 }
 
 type BidContext struct {
@@ -38,4 +39,4 @@ type BidContext struct {
 	RelayPublicKey    PublicKey `json:"relay_public_key"`
 }
 
-type SignedBlindedBeaconBlock = types.SignedBlindedBeaconBlock
+type SignedBlindedBeaconBlock = consensus.SignedBlindedBeaconBlock

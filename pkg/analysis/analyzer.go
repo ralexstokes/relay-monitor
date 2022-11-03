@@ -90,12 +90,13 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 
 	bid := &event.Transcript.Bid
 	acceptance := &event.Transcript.Acceptance
+
 	// TODO implement
 	// proposerPublicKey, err := a.consensusClient.GetPublicKeyForIndex(acceptance.Message.ProposerIndex)
 	proposerPublicKey := types.PublicKey{}
 	bidCtx := &types.BidContext{
-		Slot:              acceptance.Message.Slot,
-		ParentHash:        acceptance.Message.Body.ExecutionPayloadHeader.ParentHash,
+		Slot:              acceptance.Block.Slot,
+		ParentHash:        acceptance.Block.Body.ExecutionPayloadHeader.ParentHash,
 		ProposerPublicKey: proposerPublicKey,
 		RelayPublicKey:    bid.Message.Pubkey,
 	}
