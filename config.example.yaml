@@ -1,13 +1,15 @@
 ---
 network:
-  name: "sepolia"
-  genesis_time: 1655733600
+  name: "mainnet"
+  genesis_time: 1606824023
   seconds_per_slot: 12
   slots_per_epoch: 32
 consensus:
-  endpoint: "http://127.0.0.1:5052"
+        endpoint: "http://lb-eth2-prysm-staging.aws.metrika.co:3500"
 relays:
-  - "https://0x845bd072b7cd566f02faeb0a4033ce9399e42839ced64e8b2adcfc859ed1e8e1a5a293336a49feac6d9a5edb779be53a@builder-relay-sepolia.flashbots.net"
+  - "https://0xac6e77dfe25ecd6110b8e780608cce0dab71fdd5ebea22a16c0205200f2f8e2e3ad3b71d3499c54ad14d6c21b41a37ae@boost-relay.flashbots.net"
 api:
-  host: "localhost"
+  host: "0.0.0.0"
   port: 8080
+output:
+  path: "/data/relay/out.json"

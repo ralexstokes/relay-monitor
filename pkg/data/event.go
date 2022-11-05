@@ -1,6 +1,10 @@
 package data
 
-import "github.com/ralexstokes/relay-monitor/pkg/types"
+import (
+	"time"
+
+	"github.com/ralexstokes/relay-monitor/pkg/types"
+)
 
 type Event struct {
 	Payload any
@@ -17,4 +21,11 @@ type ValidatorRegistrationEvent struct {
 
 type AuctionTranscriptEvent struct {
 	Transcript *types.AuctionTranscript
+}
+
+type Output struct {
+	Timestamp time.Time
+	Rtt       uint64
+	Relay     string
+	Bid       BidEvent
 }

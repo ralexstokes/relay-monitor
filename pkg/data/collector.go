@@ -2,9 +2,12 @@ package data
 
 import (
 	"context"
+	"encoding/json"
+	"time"
 
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
+	"github.com/ralexstokes/relay-monitor/pkg/output"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 	"go.uber.org/zap"
 )
@@ -15,19 +18,23 @@ type Collector struct {
 	clock           *consensus.Clock
 	consensusClient *consensus.Client
 	events          chan<- Event
+	output          *output.FileOutput
 }
 
-func NewCollector(zapLogger *zap.Logger, relays []*builder.Client, clock *consensus.Clock, consensusClient *consensus.Client, events chan<- Event) *Collector {
+func NewCollector(zapLogger *zap.Logger, relays []*builder.Client, clock *consensus.Clock, consensusClient *consensus.Client, output *output.FileOutput, events chan<- Event) *Collector {
 	return &Collector{
 		logger:          zapLogger,
 		relays:          relays,
 		clock:           clock,
 		consensusClient: consensusClient,
 		events:          events,
+		output:          output,
 	}
 }
 
 func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Client, slot types.Slot) (*BidEvent, error) {
+	logger := c.logger.Sugar()
+
 	parentHash, err := c.consensusClient.GetParentHash(ctx, slot)
 	if err != nil {
 		return nil, err
@@ -36,7 +43,7 @@ func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Clie
 	if err != nil {
 		return nil, err
 	}
-	bid, exists, err := relay.GetBid(slot, parentHash, *publicKey)
+	bid, exists, duration, err := relay.GetBid(slot, parentHash, *publicKey)
 	if err != nil {
 		return nil, err
 	}
@@ -50,6 +57,24 @@ func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Clie
 		RelayPublicKey:    relay.PublicKey,
 	}
 	event := &BidEvent{Context: &bidCtx, Bid: bid}
+
+	out := &Output{
+		Timestamp: time.Now(),
+		Rtt:       duration,
+		Bid:       *event,
+		Relay:     relay.Endpoint(),
+	}
+
+	outBytes, err := json.Marshal(out)
+	if err != nil {
+		logger.Warnw("unable to marshal outout", "error", err, "content", out)
+	} else {
+		err = c.output.WriteEntry(outBytes)
+		if err != nil {
+			logger.Warnw("unable to write output", "error", err)
+		}
+	}
+
 	return event, nil
 }
 

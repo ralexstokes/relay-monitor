@@ -23,6 +23,10 @@ func (c *Client) String() string {
 	return c.PublicKey.String()
 }
 
+func (c *Client) Endpoint() string {
+	return c.endpoint
+}
+
 func NewClient(endpoint string) (*Client, error) {
 	u, err := url.Parse(endpoint)
 	if err != nil {
@@ -65,24 +69,26 @@ func (c *Client) GetStatus() error {
 }
 
 // GetBid implements the `getHeader` endpoint in the Builder API
-func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.PublicKey) (*types.Bid, bool, error) {
+func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.PublicKey) (*types.Bid, bool, uint64, error) {
 	bidUrl := c.endpoint + fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot, parentHash, publicKey)
 	req, err := http.NewRequest(http.MethodGet, bidUrl, nil)
 	if err != nil {
-		return nil, false, err
+		return nil, false, 0, err
 	}
+	start := time.Now()
 	resp, err := c.client.Do(req)
+	duration := time.Since(start).Milliseconds()
 	if err != nil {
-		return nil, false, err
+		return nil, false, 0, err
 	}
 	if resp.StatusCode == http.StatusNoContent {
-		return nil, false, nil
+		return nil, false, 0, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, false, fmt.Errorf("failed to get bid with HTTP status code %d", resp.StatusCode)
+		return nil, false, 0, fmt.Errorf("failed to get bid with HTTP status code %d", resp.StatusCode)
 	}
 
 	var bid go_boost_types.GetHeaderResponse
 	err = json.NewDecoder(resp.Body).Decode(&bid)
-	return bid.Data, true, err
+	return bid.Data, true, uint64(duration), err
 }
