@@ -69,6 +69,7 @@ func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Clie
 	if err != nil {
 		logger.Warnw("unable to marshal outout", "error", err, "content", out)
 	} else {
+		outBytes = append(outBytes, []byte("\n")...)
 		err = c.output.WriteEntry(outBytes)
 		if err != nil {
 			logger.Warnw("unable to write output", "error", err)
