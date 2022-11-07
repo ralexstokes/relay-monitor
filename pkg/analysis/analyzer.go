@@ -88,8 +88,26 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 	// TODO validations on data
 	// - validate bid correlates with acceptance, otherwise consider a count against the proposer
 
-	bid := &event.Transcript.Bid
-	acceptance := &event.Transcript.Acceptance
+	if event.Transcript == nil {
+		return
+	}
+
+	transcript := event.Transcript
+	bid := &transcript.Bid
+	if bid == nil {
+		return
+	}
+	if bid.Message == nil {
+		return
+	}
+	acceptance := &transcript.Acceptance
+	if acceptance == nil {
+		return
+	}
+	if acceptance.Message == nil {
+		return
+	}
+
 	// TODO implement
 	// proposerPublicKey, err := a.consensusClient.GetPublicKeyForIndex(acceptance.Message.ProposerIndex)
 	proposerPublicKey := types.PublicKey{}
