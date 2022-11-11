@@ -52,13 +52,14 @@ type Server struct {
 	consensusClient *consensus.Client
 }
 
-func New(config *Config, logger *zap.Logger, analyzer *analysis.Analyzer, events chan<- data.Event, clock *consensus.Clock, consensusClient *consensus.Client) *Server {
+func New(config *Config, logger *zap.Logger, analyzer *analysis.Analyzer, events chan<- data.Event, clock *consensus.Clock, store store.Storer, consensusClient *consensus.Client) *Server {
 	return &Server{
 		config:          config,
 		logger:          logger,
 		analyzer:        analyzer,
 		events:          events,
 		clock:           clock,
+		store:           store,
 		consensusClient: consensusClient,
 	}
 }
