@@ -25,6 +25,7 @@ func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		bids:          make(map[types.BidContext]types.Bid),
 		registrations: make(map[types.PublicKey][]types.SignedValidatorRegistration),
+		acceptances:   make(map[types.BidContext]types.SignedBlindedBeaconBlock),
 	}
 }
 
