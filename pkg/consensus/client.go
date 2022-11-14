@@ -39,7 +39,7 @@ type Client struct {
 	// slot -> Hash
 	executionCache *lru.Cache
 	// publicKey -> Validator
-	validatorCache *lru.Cache
+	validatorCache map[types.PublicKey]*eth2api.ValidatorResponse
 }
 
 func NewClient(ctx context.Context, endpoint string, logger *zap.Logger, currentSlot types.Slot, currentEpoch types.Epoch, slotsPerEpoch uint64) (*Client, error) {
@@ -64,10 +64,7 @@ func NewClient(ctx context.Context, endpoint string, logger *zap.Logger, current
 		return nil, err
 	}
 
-	validatorCache, err := lru.New(cacheSize)
-	if err != nil {
-		return nil, err
-	}
+	validatorCache := make(map[types.PublicKey]*eth2api.ValidatorResponse)
 
 	client := &Client{
 		logger:         logger,
@@ -145,15 +142,11 @@ func (c *Client) GetExecutionHash(slot types.Slot) (types.Hash, error) {
 }
 
 func (c *Client) GetValidator(publicKey *types.PublicKey) (*eth2api.ValidatorResponse, error) {
-	val, ok := c.validatorCache.Get(publicKey)
+	validator, ok := c.validatorCache[*publicKey]
 	if !ok {
 		return nil, fmt.Errorf("missing validator entry for public key %s", publicKey)
 	}
-	validator, ok := val.(eth2api.ValidatorResponse)
-	if !ok {
-		return nil, fmt.Errorf("internal: validator cache contains an unexpected type %T", val)
-	}
-	return &validator, nil
+	return validator, nil
 }
 
 func (c *Client) GetParentHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
@@ -288,7 +281,8 @@ func (c *Client) FetchValidators(ctx context.Context) error {
 
 	for _, validator := range response {
 		publicKey := validator.Validator.Pubkey
-		c.validatorCache.Add(publicKey, validator)
+		key := types.PublicKey(publicKey)
+		c.validatorCache[key] = &validator
 	}
 
 	return nil
