@@ -22,7 +22,7 @@ import (
 
 const (
 	clientTimeoutSec = 30
-	cacheSize        = 128
+	cacheSize        = 1024
 )
 
 type ValidatorInfo struct {
