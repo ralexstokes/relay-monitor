@@ -1,6 +1,7 @@
 ---
 network:
   name: "sepolia"
+  genesis_fork_version: 0x90000069
   genesis_time: 1655733600
   seconds_per_slot: 12
   slots_per_epoch: 32

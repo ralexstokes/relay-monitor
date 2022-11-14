@@ -6,3 +6,5 @@ var (
 	BuilderDomain   = types.DomainBuilder
 	VerifySignature = types.VerifySignature
 )
+
+type Domain = types.Domain
