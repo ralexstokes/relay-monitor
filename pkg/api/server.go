@@ -166,6 +166,7 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 		FaultRecord: faults,
 	}
 	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
 	err := encoder.Encode(response)
 	if err != nil {
 		logger.Errorw("could not encode relay faults", "error", err)
