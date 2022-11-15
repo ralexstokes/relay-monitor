@@ -2,11 +2,9 @@ package monitor
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"time"
 
-	"github.com/flashbots/go-boost-utils/types"
 	"github.com/ralexstokes/relay-monitor/pkg/analysis"
 	"github.com/ralexstokes/relay-monitor/pkg/api"
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
@@ -68,9 +66,7 @@ func New(ctx context.Context, config *Config, zapLogger *zap.Logger) (*Monitor, 
 	store := store.NewMemoryStore()
 	analyzer := analysis.NewAnalyzer(zapLogger, relays, events, store)
 
-	genesisForkVersion := [4]byte{}
-	binary.BigEndian.PutUint32(genesisForkVersion[0:4], config.Network.GenesisForkVersion)
-	config.Api.SignatureDomain = types.ComputeDomain(types.DomainTypeAppBuilder, genesisForkVersion, types.Root{})
+	config.Api.SignatureDomain = config.Network.SignatureDomain()
 	apiServer := api.New(config.Api, zapLogger, analyzer, events, clock, store, consensusClient)
 	return &Monitor{
 		logger:    zapLogger,
