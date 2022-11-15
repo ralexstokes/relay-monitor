@@ -27,5 +27,6 @@ type Output struct {
 	Timestamp time.Time
 	Rtt       uint64
 	Relay     string
+	Region    string
 	Bid       BidEvent
 }

@@ -23,4 +23,5 @@ type Config struct {
 	Relays    []string         `yaml:"relays"`
 	Api       *api.Config      `yaml:"api"`
 	Output    *OutputConfig    `yaml:"output"`
+	Region    string           `yaml:"region"`
 }
