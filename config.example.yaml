@@ -13,3 +13,4 @@ api:
   port: 8080
 output:
   path: "/data/relay/out.json"
+region: local

@@ -19,9 +19,10 @@ type Collector struct {
 	consensusClient *consensus.Client
 	events          chan<- Event
 	output          *output.FileOutput
+	region          string
 }
 
-func NewCollector(zapLogger *zap.Logger, relays []*builder.Client, clock *consensus.Clock, consensusClient *consensus.Client, output *output.FileOutput, events chan<- Event) *Collector {
+func NewCollector(zapLogger *zap.Logger, relays []*builder.Client, clock *consensus.Clock, consensusClient *consensus.Client, output *output.FileOutput, region string, events chan<- Event) *Collector {
 	return &Collector{
 		logger:          zapLogger,
 		relays:          relays,
@@ -29,6 +30,7 @@ func NewCollector(zapLogger *zap.Logger, relays []*builder.Client, clock *consen
 		consensusClient: consensusClient,
 		events:          events,
 		output:          output,
+		region:          region,
 	}
 }
 
@@ -63,6 +65,7 @@ func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Clie
 		Rtt:       duration,
 		Bid:       *event,
 		Relay:     relay.Endpoint(),
+		Region:    c.region,
 	}
 
 	outBytes, err := json.Marshal(out)
