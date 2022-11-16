@@ -25,7 +25,12 @@ type Analyzer struct {
 func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan data.Event, store store.Storer) *Analyzer {
 	faults := make(FaultRecord)
 	for _, relay := range relays {
-		faults[relay.PublicKey] = &Faults{}
+		faults[relay.PublicKey] = &Faults{
+			Stats: &FaultStats{},
+			Misc: &Misc{
+				Endpoint: relay.Hostname(),
+			},
+		}
 	}
 	return &Analyzer{
 		logger: logger,
@@ -65,7 +70,7 @@ func (a *Analyzer) processBid(ctx context.Context, event *data.BidEvent) {
 	relayID := bidCtx.RelayPublicKey
 	a.faultsLock.Lock()
 	faults := a.faults[relayID]
-	faults.TotalBids += 1
+	faults.Stats.TotalBids += 1
 	a.faultsLock.Unlock()
 }
 
