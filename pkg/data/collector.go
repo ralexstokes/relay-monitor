@@ -36,11 +36,11 @@ func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Clie
 	if err != nil {
 		return nil, err
 	}
-	bid, exists, err := relay.GetBid(slot, parentHash, *publicKey)
+	bid, err := relay.GetBid(slot, parentHash, *publicKey)
 	if err != nil {
 		return nil, err
 	}
-	if !exists {
+	if bid == nil {
 		return nil, nil
 	}
 	bidCtx := types.BidContext{
@@ -82,7 +82,7 @@ func (c *Collector) collectFromRelay(ctx context.Context, relay *builder.Client)
 	}
 }
 
-func (c *Collector) syncExecutionHeads(ctx context.Context) {
+func (c *Collector) syncBlocks(ctx context.Context) {
 	logger := c.logger.Sugar()
 
 	heads := c.consensusClient.StreamHeads(ctx)
@@ -91,7 +91,7 @@ func (c *Collector) syncExecutionHeads(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case head := <-heads:
-			_, err := c.consensusClient.FetchExecutionHash(ctx, head.Slot)
+			err := c.consensusClient.FetchBlock(ctx, head.Slot)
 			if err != nil {
 				logger.Warnf("could not fetch latest execution hash for slot %d: %v", head.Slot, err)
 			}
@@ -135,7 +135,7 @@ func (c *Collector) syncValidators(ctx context.Context) {
 
 // TODO refactor this into a separate component as the list of duties is growing outside the "collector" abstraction
 func (c *Collector) collectConsensusData(ctx context.Context) {
-	go c.syncExecutionHeads(ctx)
+	go c.syncBlocks(ctx)
 	go c.syncProposers(ctx)
 	go c.syncValidators(ctx)
 }

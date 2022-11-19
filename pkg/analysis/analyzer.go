@@ -4,34 +4,51 @@ import (
 	"context"
 	"sync"
 
+	"github.com/holiman/uint256"
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
+	"github.com/ralexstokes/relay-monitor/pkg/consensus"
+	"github.com/ralexstokes/relay-monitor/pkg/crypto"
 	"github.com/ralexstokes/relay-monitor/pkg/data"
 	"github.com/ralexstokes/relay-monitor/pkg/store"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 	"go.uber.org/zap"
 )
 
+const (
+	GasLimitBoundDivisor = 1024
+)
+
+type Config struct {
+	SignatureDomain crypto.Domain
+}
+
 type Analyzer struct {
+	config *Config
 	logger *zap.Logger
 
 	events <-chan data.Event
 
-	store store.Storer
+	store           store.Storer
+	consensusClient *consensus.Client
+	clock           *consensus.Clock
 
 	faults     FaultRecord
 	faultsLock sync.Mutex
 }
 
-func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan data.Event, store store.Storer) *Analyzer {
+func NewAnalyzer(config *Config, logger *zap.Logger, relays []*builder.Client, events <-chan data.Event, store store.Storer, consensusClient *consensus.Client, clock *consensus.Clock) *Analyzer {
 	faults := make(FaultRecord)
 	for _, relay := range relays {
 		faults[relay.PublicKey] = &Faults{}
 	}
 	return &Analyzer{
-		logger: logger,
-		events: events,
-		store:  store,
-		faults: faults,
+		config:          config,
+		logger:          logger,
+		events:          events,
+		store:           store,
+		consensusClient: consensusClient,
+		clock:           clock,
+		faults:          faults,
 	}
 }
 
@@ -48,6 +65,142 @@ func (a *Analyzer) GetFaults(start, end types.Epoch) FaultRecord {
 	return faults
 }
 
+func (a *Analyzer) validateGasLimit(ctx context.Context, gasLimit uint64, gasLimitPreference uint64, blockNumber uint64) (bool, error) {
+	if gasLimit == gasLimitPreference {
+		return true, nil
+	}
+
+	parentGasLimit, err := a.consensusClient.GetParentGasLimit(ctx, blockNumber)
+	if err != nil {
+		return false, err
+	}
+
+	var expectedBound uint64
+	if gasLimitPreference > gasLimit {
+		expectedBound = parentGasLimit + (parentGasLimit / GasLimitBoundDivisor)
+	} else {
+		expectedBound = parentGasLimit - (parentGasLimit / GasLimitBoundDivisor)
+	}
+
+	return gasLimit == expectedBound, nil
+}
+
+// borrowed from `flashbots/go-boost-utils`
+func reverse(src []byte) []byte {
+	dst := make([]byte, len(src))
+	copy(dst, src)
+	for i := len(dst)/2 - 1; i >= 0; i-- {
+		opp := len(dst) - 1 - i
+		dst[i], dst[opp] = dst[opp], dst[i]
+	}
+	return dst
+}
+
+func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bid *types.Bid) (*InvalidBid, error) {
+	if bid == nil {
+		return nil, nil
+	}
+
+	if bidCtx.RelayPublicKey != bid.Message.Pubkey {
+		return &InvalidBid{
+			Reason: "incorrect public key from relay",
+		}, nil
+	}
+
+	validSignature, err := crypto.VerifySignature(bid.Message, a.config.SignatureDomain, bid.Message.Pubkey[:], bid.Signature[:])
+	if err != nil {
+		return nil, err
+	}
+
+	if !validSignature {
+		return &InvalidBid{
+			Reason: "invalid signature",
+		}, nil
+	}
+
+	header := bid.Message.Header
+
+	if bidCtx.ParentHash != header.ParentHash {
+		return &InvalidBid{
+			Reason: "invalid parent hash",
+		}, nil
+	}
+
+	registration, err := store.GetLatestValidatorRegistration(ctx, a.store, &bidCtx.ProposerPublicKey)
+	if err != nil {
+		return nil, err
+	}
+	if registration != nil {
+		expectedFeeRecipient := registration.Message.FeeRecipient
+		gasLimitPreference := registration.Message.GasLimit
+
+		if expectedFeeRecipient != header.FeeRecipient {
+			return &InvalidBid{
+				Reason: "invalid fee recipient",
+				Type:   InvalidBidIgnoredPreferencesType,
+			}, nil
+		}
+
+		valid, err := a.validateGasLimit(ctx, header.GasLimit, gasLimitPreference, header.BlockNumber)
+		if err != nil {
+			return nil, err
+		}
+		if !valid {
+			return &InvalidBid{
+				Reason: "invalid gas limit",
+				Type:   InvalidBidIgnoredPreferencesType,
+			}, nil
+		}
+	}
+
+	expectedRandomness, err := a.consensusClient.GetRandomnessForProposal(bidCtx.Slot)
+	if err != nil {
+		return nil, err
+	}
+	if expectedRandomness != header.Random {
+		return &InvalidBid{
+			Reason: "invalid random value",
+		}, nil
+	}
+
+	expectedBlockNumber, err := a.consensusClient.GetBlockNumberForProposal(bidCtx.Slot)
+	if err != nil {
+		return nil, err
+	}
+	if expectedBlockNumber != header.BlockNumber {
+		return &InvalidBid{
+			Reason: "invalid block number",
+		}, nil
+	}
+
+	if header.GasUsed > header.GasLimit {
+		return &InvalidBid{
+			Reason: "gas used is higher than gas limit",
+		}, nil
+	}
+
+	expectedTimestamp := a.clock.SlotInSeconds(bidCtx.Slot)
+	if expectedTimestamp != int64(header.Timestamp) {
+		return &InvalidBid{
+			Reason: "invalid timestamp",
+		}, nil
+	}
+
+	expectedBaseFee, err := a.consensusClient.GetBaseFeeForProposal(bidCtx.Slot)
+	if err != nil {
+		return nil, err
+	}
+	baseFee := uint256.NewInt(0)
+	baseFee.SetBytes(reverse(header.BaseFeePerGas[:]))
+	if !expectedBaseFee.Eq(baseFee) {
+		return &InvalidBid{
+			Reason: "invalid base fee",
+		}, nil
+	}
+
+	return nil, nil
+}
+
 func (a *Analyzer) processBid(ctx context.Context, event *data.BidEvent) {
 	logger := a.logger.Sugar()
 
@@ -56,19 +209,42 @@ func (a *Analyzer) processBid(ctx context.Context, event *data.BidEvent) {
 
 	err := a.store.PutBid(ctx, bidCtx, bid)
 	if err != nil {
-		logger.Warn("could not store bid: %+v", event)
+		logger.Warnf("could not store bid: %+v", event)
 		return
 	}
 
-	// TODO dispatch event to analyze bid
+	result, err := a.validateBid(ctx, bidCtx, bid)
+	if err != nil {
+		logger.Warnf("could not validate bid with error %+v: %+v, %+v", err, bidCtx, bid)
+		return
+	} else {
+		logger.Debugf("found valid bid: %+v, %+v", bidCtx, bid)
+	}
 
+	// TODO persist analysis results
 	relayID := bidCtx.RelayPublicKey
 	a.faultsLock.Lock()
 	faults := a.faults[relayID]
-	faults.TotalBids += 1
+	if bid != nil {
+		faults.TotalBids += 1
+	}
+	if result != nil {
+		logger.Debugf("invalid bid: %+v, %+v", result, event)
+		switch result.Type {
+		case InvalidBidConsensusType:
+			faults.ConsensusInvalidBids += 1
+		case InvalidBidIgnoredPreferencesType:
+			faults.IgnoredPreferencesBids += 1
+		default:
+			logger.Warnf("could not interpret bid analysis result: %+v, %+v", event, result)
+			return
+		}
+	}
 	a.faultsLock.Unlock()
 }
 
+// Process incoming validator registrations
+// This data has already been validated by the sender of the event
 func (a *Analyzer) processValidatorRegistration(ctx context.Context, event data.ValidatorRegistrationEvent) {
 	logger := a.logger.Sugar()
 
@@ -76,7 +252,7 @@ func (a *Analyzer) processValidatorRegistration(ctx context.Context, event data.
 	for _, registration := range registrations {
 		err := a.store.PutValidatorRegistration(ctx, &registration)
 		if err != nil {
-			logger.Warn("could not store validator registration: %+v", registration)
+			logger.Warnf("could not store validator registration: %+v", registration)
 			return
 		}
 	}
@@ -88,6 +264,7 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 	// TODO validations on data
 	// - validate bid correlates with acceptance, otherwise consider a count against the proposer
 
+	// TODO clean up nil handling here?
 	if event.Transcript == nil {
 		return
 	}
@@ -108,6 +285,22 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 		return
 	}
 
+	// TODO correlate to existing bid
+
+	// verify later w/ full payload:
+	// w/ payload, check:
+	// (claimed) Value
+	// BlockHash
+	// StateRoot
+	// ReceiptsRoot
+	// LogsBloom
+	// TransactionsRoot
+
+	// TODO save transcript
+	// TODO dispatch event to analyze transcript
+	// TODO validate to extent possible
+	// TODO save analysis results
+
 	// TODO implement
 	// proposerPublicKey, err := a.consensusClient.GetPublicKeyForIndex(acceptance.Message.ProposerIndex)
 	proposerPublicKey := types.PublicKey{}
@@ -120,17 +313,15 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 
 	err := a.store.PutBid(ctx, bidCtx, bid)
 	if err != nil {
-		logger.Warn("could not store bid: %+v", event)
+		logger.Warnf("could not store bid: %+v", event)
 		return
 	}
 
 	err = a.store.PutAcceptance(ctx, bidCtx, acceptance)
 	if err != nil {
-		logger.Warn("could not store bid acceptance data: %+v", event)
+		logger.Warnf("could not store bid acceptance data: %+v", event)
 		return
 	}
-
-	// TODO dispatch event to analyze transcript
 }
 
 func (a *Analyzer) Run(ctx context.Context) error {

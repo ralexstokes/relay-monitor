@@ -64,9 +64,12 @@ func New(ctx context.Context, config *Config, zapLogger *zap.Logger) (*Monitor, 
 	events := make(chan data.Event, eventBufferSize)
 	collector := data.NewCollector(zapLogger, relays, clock, consensusClient, events)
 	store := store.NewMemoryStore()
-	analyzer := analysis.NewAnalyzer(zapLogger, relays, events, store)
+	analyzerConfig := &analysis.Config{}
+	signatureDomain := config.Network.SignatureDomain()
+	analyzerConfig.SignatureDomain = signatureDomain
+	analyzer := analysis.NewAnalyzer(analyzerConfig, zapLogger, relays, events, store, consensusClient, clock)
 
-	config.Api.SignatureDomain = config.Network.SignatureDomain()
+	config.Api.SignatureDomain = signatureDomain
 	apiServer := api.New(config.Api, zapLogger, analyzer, events, clock, store, consensusClient)
 	return &Monitor{
 		logger:    zapLogger,

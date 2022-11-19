@@ -2,12 +2,15 @@ package types
 
 import (
 	"github.com/flashbots/go-boost-utils/types"
+	"github.com/holiman/uint256"
 )
 
 type (
 	Slot  = uint64
 	Epoch = uint64
 )
+
+type Uint256 = uint256.Int
 
 type PublicKey = types.PublicKey
 
