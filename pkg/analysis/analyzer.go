@@ -131,19 +131,10 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 		return nil, err
 	}
 	if registration != nil {
-		expectedFeeRecipient := registration.Message.FeeRecipient
 		gasLimitPreference := registration.Message.GasLimit
 
-		if expectedFeeRecipient != header.FeeRecipient {
-			return &InvalidBid{
-				Reason: "invalid fee recipient",
-				Type:   InvalidBidIgnoredPreferencesType,
-				Context: map[string]interface{}{
-					"expected fee recipient":  expectedFeeRecipient,
-					"fee recipient in header": header.FeeRecipient,
-				},
-			}, nil
-		}
+		// NOTE: need transaction set for possibility of payment transaction
+		// so we defer analysis of fee recipient until we have the full payload
 
 		valid, err := a.validateGasLimit(ctx, header.GasLimit, gasLimitPreference, header.BlockNumber)
 		if err != nil {
@@ -295,7 +286,19 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 
 	// verify later w/ full payload:
 	// w/ payload, check:
-	// (claimed) Value
+	// (claimed) Value, including fee recipient
+	// expectedFeeRecipient := registration.Message.FeeRecipient
+	// if expectedFeeRecipient != header.FeeRecipient {
+	// 	return &InvalidBid{
+	// 		Reason: "invalid fee recipient",
+	// 		Type:   InvalidBidIgnoredPreferencesType,
+	// 		Context: map[string]interface{}{
+	// 			"expected fee recipient":  expectedFeeRecipient,
+	// 			"fee recipient in header": header.FeeRecipient,
+	// 		},
+	// 	}, nil
+	// }
+
 	// BlockHash
 	// StateRoot
 	// ReceiptsRoot
