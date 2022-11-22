@@ -18,12 +18,7 @@ const (
 	GasLimitBoundDivisor = 1024
 )
 
-type Config struct {
-	SignatureDomain crypto.Domain
-}
-
 type Analyzer struct {
-	config *Config
 	logger *zap.Logger
 
 	events <-chan data.Event
@@ -36,13 +31,12 @@ type Analyzer struct {
 	faultsLock sync.Mutex
 }
 
-func NewAnalyzer(config *Config, logger *zap.Logger, relays []*builder.Client, events <-chan data.Event, store store.Storer, consensusClient *consensus.Client, clock *consensus.Clock) *Analyzer {
+func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan data.Event, store store.Storer, consensusClient *consensus.Client, clock *consensus.Clock) *Analyzer {
 	faults := make(FaultRecord)
 	for _, relay := range relays {
 		faults[relay.PublicKey] = &Faults{}
 	}
 	return &Analyzer{
-		config:          config,
 		logger:          logger,
 		events:          events,
 		store:           store,
@@ -107,7 +101,7 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 		}, nil
 	}
 
-	validSignature, err := crypto.VerifySignature(bid.Message, a.config.SignatureDomain, bid.Message.Pubkey[:], bid.Signature[:])
+	validSignature, err := crypto.VerifySignature(bid.Message, a.consensusClient.SignatureDomainForBuilder(), bid.Message.Pubkey[:], bid.Signature[:])
 	if err != nil {
 		return nil, err
 	}
@@ -214,6 +208,7 @@ func (a *Analyzer) processBid(ctx context.Context, event *data.BidEvent) {
 		return
 	}
 
+	// TODO scope faults by coordinate
 	// TODO persist analysis results
 	relayID := bidCtx.RelayPublicKey
 	a.faultsLock.Lock()
@@ -261,34 +256,57 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 
 	logger.Debugf("received transcript: %+v", event.Transcript)
 
-	// TODO validations on data
-	// - validate bid correlates with acceptance, otherwise consider a count against the proposer
-
-	// TODO clean up nil handling here?
-	if event.Transcript == nil {
-		return
-	}
-
 	transcript := event.Transcript
-	bid := &transcript.Bid
-	if bid == nil {
-		return
-	}
-	if bid.Message == nil {
-		return
-	}
-	acceptance := &transcript.Acceptance
-	if acceptance == nil {
-		return
-	}
-	if acceptance.Message == nil {
+
+	bid := transcript.Bid.Message
+	signedBlindedBeaconBlock := &transcript.Acceptance
+	blindedBeaconBlock := signedBlindedBeaconBlock.Message
+
+	// Verify signature first, to avoid doing unnecessary work in the event this is a "bad" transcript
+	proposerPublicKey, err := a.consensusClient.GetPublicKeyForIndex(ctx, blindedBeaconBlock.ProposerIndex)
+	if err != nil {
+		logger.Warnw("could not find public key for validator index", "error", err)
 		return
 	}
 
-	// TODO correlate to existing bid
+	domain := a.consensusClient.SignatureDomain(blindedBeaconBlock.Slot)
+	valid, err := crypto.VerifySignature(signedBlindedBeaconBlock.Message, domain, proposerPublicKey[:], signedBlindedBeaconBlock.Signature[:])
+	if err != nil {
+		logger.Warnw("error verifying signature from proposer; could not determine authenticity of transcript", "error", err, "bid", bid, "acceptance", signedBlindedBeaconBlock)
+		return
+	}
+	if !valid {
+		logger.Warnw("signature from proposer was invalid; could not determine authenticity of transcript", "error", err, "bid", bid, "acceptance", signedBlindedBeaconBlock)
+		return
+	}
+
+	bidCtx := &types.BidContext{
+		Slot:              blindedBeaconBlock.Slot,
+		ParentHash:        bid.Header.ParentHash,
+		ProposerPublicKey: *proposerPublicKey,
+		RelayPublicKey:    bid.Pubkey,
+	}
+	existingBid, err := a.store.GetBid(ctx, bidCtx)
+	if err != nil {
+		logger.Warnw("could not find existing bid, will continue full analysis", "context", bidCtx)
+
+		// TODO: process bid as well as rest of transcript
+	}
+
+	if *existingBid != transcript.Bid {
+		logger.Warnw("provided bid from transcript did not match existing bid, will continue full analysis", "context", bidCtx)
+
+		// TODO: process bid as well as rest of transcript
+	}
+
+	// TODO also store bid if missing?
+	err = a.store.PutAcceptance(ctx, bidCtx, signedBlindedBeaconBlock)
+	if err != nil {
+		logger.Warnf("could not store bid acceptance data: %+v", event)
+		return
+	}
 
 	// verify later w/ full payload:
-	// w/ payload, check:
 	// (claimed) Value, including fee recipient
 	// expectedFeeRecipient := registration.Message.FeeRecipient
 	// if expectedFeeRecipient != header.FeeRecipient {
@@ -308,32 +326,8 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 	// LogsBloom
 	// TransactionsRoot
 
-	// TODO save transcript
-	// TODO dispatch event to analyze transcript
-	// TODO validate to extent possible
 	// TODO save analysis results
 
-	// TODO implement
-	// proposerPublicKey, err := a.consensusClient.GetPublicKeyForIndex(acceptance.Message.ProposerIndex)
-	proposerPublicKey := types.PublicKey{}
-	bidCtx := &types.BidContext{
-		Slot:              acceptance.Message.Slot,
-		ParentHash:        acceptance.Message.Body.ExecutionPayloadHeader.ParentHash,
-		ProposerPublicKey: proposerPublicKey,
-		RelayPublicKey:    bid.Message.Pubkey,
-	}
-
-	err := a.store.PutBid(ctx, bidCtx, bid)
-	if err != nil {
-		logger.Warnf("could not store bid: %+v", event)
-		return
-	}
-
-	err = a.store.PutAcceptance(ctx, bidCtx, acceptance)
-	if err != nil {
-		logger.Warnf("could not store bid acceptance data: %+v", event)
-		return
-	}
 }
 
 func (a *Analyzer) Run(ctx context.Context) error {
