@@ -246,6 +246,7 @@ func (a *Analyzer) processValidatorRegistration(ctx context.Context, event data.
 	logger := a.logger.Sugar()
 
 	registrations := event.Registrations
+	logger.Debugf("received %d validator registrations", len(registrations))
 	for _, registration := range registrations {
 		err := a.store.PutValidatorRegistration(ctx, &registration)
 		if err != nil {
@@ -257,6 +258,8 @@ func (a *Analyzer) processValidatorRegistration(ctx context.Context, event data.
 
 func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.AuctionTranscriptEvent) {
 	logger := a.logger.Sugar()
+
+	logger.Debugf("received transcript: %+v", event.Transcript)
 
 	// TODO validations on data
 	// - validate bid correlates with acceptance, otherwise consider a count against the proposer
@@ -339,8 +342,6 @@ func (a *Analyzer) Run(ctx context.Context) error {
 	for {
 		select {
 		case event := <-a.events:
-			logger.Debugf("got event: %+v", event.Payload)
-
 			switch event := event.Payload.(type) {
 			case *data.BidEvent:
 				a.processBid(ctx, event)
