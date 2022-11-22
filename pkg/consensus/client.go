@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/math"
@@ -15,10 +16,12 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/protolambda/eth2api"
 	"github.com/protolambda/eth2api/client/beaconapi"
+	"github.com/protolambda/eth2api/client/configapi"
 	"github.com/protolambda/eth2api/client/validatorapi"
 	"github.com/protolambda/zrnt/eth2/beacon/bellatrix"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/r3labs/sse/v2"
+	"github.com/ralexstokes/relay-monitor/pkg/crypto"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 	"go.uber.org/zap"
 )
@@ -44,17 +47,33 @@ type Client struct {
 	logger *zap.Logger
 	client *eth2api.Eth2HttpClient
 
+	NetworkName           string
+	SlotsPerEpoch         uint64
+	SecondsPerSlot        uint64
+	GenesisTime           uint64
+	genesisForkVersion    types.ForkVersion
+	GenesisValidatorsRoot types.Root
+	altairForkVersion     types.ForkVersion
+	altairForkEpoch       types.Epoch
+	bellatrixForkVersion  types.ForkVersion
+	bellatrixForkEpoch    types.Epoch
+
+	builderSignatureDomain *crypto.Domain
+
 	// slot -> ValidatorInfo
 	proposerCache *lru.Cache
 	// slot -> SignedBeaconBlock
 	blockCache *lru.Cache
 	// blockNumber -> slot
 	blockNumberToSlotIndex *lru.Cache
+	validatorLock          sync.RWMutex
 	// publicKey -> Validator
 	validatorCache map[types.PublicKey]*eth2api.ValidatorResponse
+	// validatorIndex -> publicKey, note: points into `validatorCache`
+	validatorIndexCache map[types.ValidatorIndex]*types.PublicKey
 }
 
-func NewClient(ctx context.Context, endpoint string, logger *zap.Logger, currentSlot types.Slot, currentEpoch types.Epoch, slotsPerEpoch uint64) (*Client, error) {
+func NewClient(ctx context.Context, endpoint string, logger *zap.Logger) (*Client, error) {
 	httpClient := &eth2api.Eth2HttpClient{
 		Addr: endpoint,
 		Cli: &http.Client{
@@ -82,6 +101,7 @@ func NewClient(ctx context.Context, endpoint string, logger *zap.Logger, current
 	}
 
 	validatorCache := make(map[types.PublicKey]*eth2api.ValidatorResponse)
+	validatorIndexCache := make(map[types.ValidatorIndex]*types.PublicKey)
 
 	client := &Client{
 		logger:                 logger,
@@ -90,21 +110,41 @@ func NewClient(ctx context.Context, endpoint string, logger *zap.Logger, current
 		blockCache:             blockCache,
 		blockNumberToSlotIndex: blockNumberToSlotIndex,
 		validatorCache:         validatorCache,
+		validatorIndexCache:    validatorIndexCache,
 	}
 
-	err = client.loadCurrentContext(ctx, currentSlot, currentEpoch, slotsPerEpoch)
+	err = client.fetchGenesis(ctx)
 	if err != nil {
-		logger := logger.Sugar()
-		logger.Warn("could not load the current context from the consensus client")
+		logger := client.logger.Sugar()
+		logger.Fatalf("could not load genesis info: %v", err)
+	}
+
+	err = client.fetchSpec(ctx)
+	if err != nil {
+		logger := client.logger.Sugar()
+		logger.Fatalf("could not load spec configuration: %v", err)
 	}
 
 	return client, nil
 }
 
-func (c *Client) loadCurrentContext(ctx context.Context, currentSlot types.Slot, currentEpoch types.Epoch, slotsPerEpoch uint64) error {
+func (c *Client) SignatureDomainForBuilder() crypto.Domain {
+	if c.builderSignatureDomain == nil {
+		domain := crypto.Domain(crypto.ComputeDomain(crypto.DomainTypeAppBuilder, c.genesisForkVersion, types.Root{}))
+		c.builderSignatureDomain = &domain
+	}
+	return *c.builderSignatureDomain
+}
+
+func (c *Client) SignatureDomain(slot types.Slot) crypto.Domain {
+	forkVersion := c.GetForkVersion(slot)
+	return crypto.ComputeDomain(crypto.DomainTypeBeaconProposer, forkVersion, c.GenesisValidatorsRoot)
+}
+
+func (c *Client) LoadCurrentContext(ctx context.Context, currentSlot types.Slot, currentEpoch types.Epoch) error {
 	logger := c.logger.Sugar()
 
-	for i := uint64(0); i < slotsPerEpoch; i++ {
+	for i := uint64(0); i < c.SlotsPerEpoch; i++ {
 		err := c.FetchBlock(ctx, currentSlot-i)
 		if err != nil {
 			logger.Warnf("could not fetch latest block for slot %d: %v", currentSlot, err)
@@ -128,6 +168,51 @@ func (c *Client) loadCurrentContext(ctx context.Context, currentSlot types.Slot,
 	}
 
 	return nil
+}
+
+func (c *Client) fetchGenesis(ctx context.Context) error {
+	var resp eth2api.GenesisResponse
+	exists, err := beaconapi.Genesis(ctx, c.client, &resp)
+	if !exists {
+		return fmt.Errorf("genesis information does not exist")
+	}
+	if err != nil {
+		return err
+	}
+
+	c.GenesisTime = uint64(resp.GenesisTime)
+	c.genesisForkVersion = types.ForkVersion(resp.GenesisForkVersion)
+	c.GenesisValidatorsRoot = types.Hash(resp.GenesisValidatorsRoot)
+	return nil
+}
+
+func (c *Client) fetchSpec(ctx context.Context) error {
+	var spec common.Spec
+	err := configapi.Spec(ctx, c.client, &spec)
+	if err != nil {
+		return err
+	}
+
+	c.NetworkName = ""
+	c.SlotsPerEpoch = uint64(spec.Phase0Preset.SLOTS_PER_EPOCH)
+	c.SecondsPerSlot = uint64(spec.Config.SECONDS_PER_SLOT)
+	c.altairForkVersion = types.ForkVersion(spec.Config.ALTAIR_FORK_VERSION)
+	c.altairForkEpoch = types.Epoch(spec.Config.ALTAIR_FORK_EPOCH)
+	c.bellatrixForkVersion = types.ForkVersion(spec.Config.BELLATRIX_FORK_VERSION)
+	c.bellatrixForkEpoch = types.Epoch(spec.Config.BELLATRIX_FORK_EPOCH)
+	return nil
+}
+
+// NOTE: this assumes the fork schedule is presented in ascending order
+func (c *Client) GetForkVersion(slot types.Slot) types.ForkVersion {
+	epoch := slot / c.SlotsPerEpoch
+	if epoch >= c.bellatrixForkEpoch {
+		return c.bellatrixForkVersion
+	} else if epoch >= c.altairForkEpoch {
+		return c.altairForkVersion
+	} else {
+		return c.genesisForkVersion
+	}
 }
 
 func (c *Client) GetProposer(slot types.Slot) (*ValidatorInfo, error) {
@@ -163,6 +248,9 @@ func (c *Client) GetBlock(slot types.Slot) (*bellatrix.SignedBeaconBlock, error)
 }
 
 func (c *Client) GetValidator(publicKey *types.PublicKey) (*eth2api.ValidatorResponse, error) {
+	c.validatorLock.RLock()
+	defer c.validatorLock.RUnlock()
+
 	validator, ok := c.validatorCache[*publicKey]
 	if !ok {
 		return nil, fmt.Errorf("missing validator entry for public key %s", publicKey)
@@ -278,10 +366,14 @@ func (c *Client) FetchValidators(ctx context.Context) error {
 		return fmt.Errorf("could not fetch validators from remote endpoint because they do not exist")
 	}
 
+	c.validatorLock.Lock()
+	defer c.validatorLock.Unlock()
+
 	for _, validator := range response {
 		publicKey := validator.Validator.Pubkey
 		key := types.PublicKey(publicKey)
 		c.validatorCache[key] = &validator
+		c.validatorIndexCache[uint64(validator.Index)] = &key
 	}
 
 	return nil
@@ -378,4 +470,16 @@ func (c *Client) GetParentGasLimit(ctx context.Context, blockNumber uint64) (uin
 		return 0, err
 	}
 	return uint64(parentBlock.Message.Body.ExecutionPayload.GasLimit), nil
+}
+
+func (c *Client) GetPublicKeyForIndex(ctx context.Context, validatorIndex types.ValidatorIndex) (*types.PublicKey, error) {
+	c.validatorLock.RLock()
+	defer c.validatorLock.RUnlock()
+
+	key, ok := c.validatorIndexCache[validatorIndex]
+	if !ok {
+		// TODO consider fetching here if not in cache
+		return nil, fmt.Errorf("could not find public key for validator index %d", validatorIndex)
+	}
+	return key, nil
 }

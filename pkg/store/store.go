@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 )
@@ -11,6 +12,7 @@ type Storer interface {
 	PutValidatorRegistration(context.Context, *types.SignedValidatorRegistration) error
 	PutAcceptance(context.Context, *types.BidContext, *types.SignedBlindedBeaconBlock) error
 
+	GetBid(context.Context, *types.BidContext) (*types.Bid, error)
 	// `GetValidatorRegistrations` returns all known registrations for the validator's public key, sorted by timestamp (increasing).
 	GetValidatorRegistrations(context.Context, *types.PublicKey) ([]types.SignedValidatorRegistration, error)
 }
@@ -32,6 +34,14 @@ func NewMemoryStore() *MemoryStore {
 func (s *MemoryStore) PutBid(ctx context.Context, bidCtx *types.BidContext, bid *types.Bid) error {
 	s.bids[*bidCtx] = bid
 	return nil
+}
+
+func (s *MemoryStore) GetBid(ctx context.Context, bidCtx *types.BidContext) (*types.Bid, error) {
+	bid, ok := s.bids[*bidCtx]
+	if !ok {
+		return nil, fmt.Errorf("could not find bid for %+v", bidCtx)
+	}
+	return bid, nil
 }
 
 func (s *MemoryStore) PutValidatorRegistration(ctx context.Context, registration *types.SignedValidatorRegistration) error {

@@ -6,28 +6,23 @@ import (
 )
 
 type (
-	Slot  = uint64
-	Epoch = uint64
+	Slot                        = uint64
+	Epoch                       = uint64
+	ForkVersion                 = types.ForkVersion
+	Uint256                     = uint256.Int
+	PublicKey                   = types.PublicKey
+	Hash                        = types.Hash
+	Bid                         = types.SignedBuilderBid
+	Root                        = types.Root
+	ValidatorIndex              = uint64
+	SignedValidatorRegistration = types.SignedValidatorRegistration
+	SignedBlindedBeaconBlock    = types.SignedBlindedBeaconBlock
 )
-
-type Uint256 = uint256.Int
-
-type PublicKey = types.PublicKey
-
-type Hash = types.Hash
-
-type Bid = types.SignedBuilderBid
-
-type Root = types.Root
-
-type ValidatorIndex = uint64
 
 type Coordinate struct {
 	Slot Slot
 	Root Root
 }
-
-type SignedValidatorRegistration = types.SignedValidatorRegistration
 
 type AuctionTranscript struct {
 	Bid        Bid                            `json:"bid"`
@@ -40,5 +35,3 @@ type BidContext struct {
 	ProposerPublicKey PublicKey `json:"proposer_public_key"`
 	RelayPublicKey    PublicKey `json:"relay_public_key"`
 }
-
-type SignedBlindedBeaconBlock = types.SignedBlindedBeaconBlock
