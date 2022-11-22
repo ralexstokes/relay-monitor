@@ -10,7 +10,7 @@ Work in progress. Not ready for use yet.
 
 Go v1.19+
 
-Requires a consensus client that implements the standard [beacon node APIs](https://ethereum.github.io/beacon-APIs).
+Requires a consensus client that implements the **dev** version of the standard [beacon node APIs](https://ethereum.github.io/beacon-APIs). This includes the standard set and [the RANDAO endpoint](https://ethereum.github.io/beacon-APIs/?urls.primaryName=dev#/Beacon/getStateRandao).
 
 Every other required information is given in the configuration, e.g. `config.example.yaml`.
 
