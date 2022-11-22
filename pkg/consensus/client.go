@@ -47,7 +47,6 @@ type Client struct {
 	logger *zap.Logger
 	client *eth2api.Eth2HttpClient
 
-	NetworkName           string
 	SlotsPerEpoch         uint64
 	SecondsPerSlot        uint64
 	GenesisTime           uint64
