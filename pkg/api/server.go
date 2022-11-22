@@ -282,8 +282,6 @@ func (s *Server) handleRegisterValidator(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	logger.Debugw("got validator registrations", "data", registrations)
-
 	payload := data.ValidatorRegistrationEvent{
 		Registrations: registrations,
 	}
