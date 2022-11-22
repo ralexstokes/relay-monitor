@@ -193,7 +193,6 @@ func (c *Client) fetchSpec(ctx context.Context) error {
 		return err
 	}
 
-	c.NetworkName = ""
 	c.SlotsPerEpoch = uint64(spec.Phase0Preset.SLOTS_PER_EPOCH)
 	c.SecondsPerSlot = uint64(spec.Config.SECONDS_PER_SLOT)
 	c.altairForkVersion = types.ForkVersion(spec.Config.ALTAIR_FORK_VERSION)
