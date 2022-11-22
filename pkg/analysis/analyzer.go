@@ -138,6 +138,10 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 			return &InvalidBid{
 				Reason: "invalid fee recipient",
 				Type:   InvalidBidIgnoredPreferencesType,
+				Context: map[string]interface{}{
+					"expected fee recipient":  expectedFeeRecipient,
+					"fee recipient in header": header.FeeRecipient,
+				},
 			}, nil
 		}
 
