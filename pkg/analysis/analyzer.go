@@ -221,8 +221,6 @@ func (a *Analyzer) processBid(ctx context.Context, event *data.BidEvent) {
 	if err != nil {
 		logger.Warnf("could not validate bid with error %+v: %+v, %+v", err, bidCtx, bid)
 		return
-	} else {
-		logger.Debugf("found valid bid: %+v, %+v", bidCtx, bid)
 	}
 
 	// TODO persist analysis results
@@ -233,7 +231,6 @@ func (a *Analyzer) processBid(ctx context.Context, event *data.BidEvent) {
 		faults.TotalBids += 1
 	}
 	if result != nil {
-		logger.Debugf("invalid bid: %+v, %+v", result, event)
 		switch result.Type {
 		case InvalidBidConsensusType:
 			faults.ConsensusInvalidBids += 1
@@ -245,6 +242,11 @@ func (a *Analyzer) processBid(ctx context.Context, event *data.BidEvent) {
 		}
 	}
 	a.faultsLock.Unlock()
+	if result != nil {
+		logger.Debugf("invalid bid: %+v, %+v", result, event)
+	} else {
+		logger.Debugf("found valid bid: %+v, %+v", bidCtx, bid)
+	}
 }
 
 // Process incoming validator registrations
