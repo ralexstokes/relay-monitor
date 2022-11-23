@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -329,6 +330,11 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 	}
 
 	blockHash := signedBlindedBeaconBlock.Message.Body.ExecutionPayloadHeader.BlockHash
+
+	// TODO wait for head event before continuing...
+	// TODO remove the artificial sleep
+	time.Sleep(1 * time.Second)
+
 	_, err = a.executionClient.BlockByHash(ctx, common.Hash(blockHash))
 	if err != nil {
 		// TODO wait for ndde to sync...
