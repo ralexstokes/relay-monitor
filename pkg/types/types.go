@@ -17,6 +17,7 @@ type (
 	ValidatorIndex              = uint64
 	SignedValidatorRegistration = types.SignedValidatorRegistration
 	SignedBlindedBeaconBlock    = types.SignedBlindedBeaconBlock
+	ExecutionPayload            = types.ExecutionPayload
 )
 
 type Coordinate struct {
