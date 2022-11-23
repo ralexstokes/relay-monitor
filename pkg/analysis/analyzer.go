@@ -261,6 +261,7 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 	bid := transcript.Bid.Message
 	signedBlindedBeaconBlock := &transcript.Acceptance
 	blindedBeaconBlock := signedBlindedBeaconBlock.Message
+	logger.Warnw("got auction transcript", "blockHash", bid.Header.BlockHash, "slot", blindedBeaconBlock.Slot)
 
 	// Verify signature first, to avoid doing unnecessary work in the event this is a "bad" transcript
 	proposerPublicKey, err := a.consensusClient.GetPublicKeyForIndex(ctx, blindedBeaconBlock.ProposerIndex)

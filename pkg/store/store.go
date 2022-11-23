@@ -37,6 +37,8 @@ func (s *MemoryStore) PutBid(ctx context.Context, bidCtx *types.BidContext, bid 
 }
 
 func (s *MemoryStore) GetBid(ctx context.Context, bidCtx *types.BidContext) (*types.Bid, error) {
+	fmt.Println(bidCtx)
+	fmt.Println(s.bids)
 	bid, ok := s.bids[*bidCtx]
 	if !ok {
 		return nil, fmt.Errorf("could not find bid for %+v", bidCtx)
