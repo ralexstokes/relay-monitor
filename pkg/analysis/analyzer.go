@@ -73,7 +73,7 @@ func (a *Analyzer) GetStats(start, end types.Epoch) RelayStats {
 	return stats
 }
 
-func (a *Analyzer) validateGasLimit(ctx context.Context, gasLimit uint64, gasLimitPreference uint64, blockNumber uint64) (bool, error) {
+func (a *Analyzer) validateGasLimit(ctx context.Context, gasLimit, gasLimitPreference, blockNumber uint64) (bool, error) {
 	if gasLimit == gasLimitPreference {
 		return true, nil
 	}
