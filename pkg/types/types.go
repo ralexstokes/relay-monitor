@@ -1,6 +1,9 @@
 package types
 
 import (
+	"bytes"
+	"fmt"
+
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/holiman/uint256"
 )
@@ -17,6 +20,7 @@ type (
 	ValidatorIndex              = uint64
 	SignedValidatorRegistration = types.SignedValidatorRegistration
 	SignedBlindedBeaconBlock    = types.SignedBlindedBeaconBlock
+	ExecutionPayload            = types.ExecutionPayload
 )
 
 type Coordinate struct {
@@ -34,4 +38,10 @@ type BidContext struct {
 	ParentHash        Hash      `json:"parent_hash"`
 	ProposerPublicKey PublicKey `json:"proposer_public_key"`
 	RelayPublicKey    PublicKey `json:"relay_public_key"`
+}
+
+func (c BidContext) MarshalText() ([]byte, error) {
+	buf := bytes.NewBuffer([]byte{})
+	buf.WriteString(fmt.Sprintf("(%d, %s, %s)", c.Slot, c.ParentHash, c.ProposerPublicKey))
+	return buf.Bytes(), nil
 }

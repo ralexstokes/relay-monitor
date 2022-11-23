@@ -36,9 +36,9 @@ type Span struct {
 	End   types.Epoch `json:"end_epoch,string"`
 }
 
-type FaultsResponse struct {
-	Span                 Span `json:"span"`
-	analysis.FaultRecord `json:"data"`
+type StatsResponse struct {
+	Span                Span `json:"span"`
+	analysis.RelayStats `json:"data"`
 }
 
 type Server struct {
@@ -108,7 +108,7 @@ func (s *Server) currentEpoch() types.Epoch {
 	return s.clock.EpochForSlot(slot)
 }
 
-func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleStatsRequest(w http.ResponseWriter, r *http.Request) {
 	logger := s.logger.Sugar()
 
 	q := r.URL.Query()
@@ -118,7 +118,7 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 	if startEpochStr != "" {
 		startEpochValue, err := strconv.ParseUint(startEpochStr, 10, 64)
 		if err != nil {
-			logger.Errorw("error parsing query param for faults request", "err", err, "startEpoch", startEpochStr)
+			logger.Errorw("error parsing query param for stats request", "err", err, "startEpoch", startEpochStr)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -131,7 +131,7 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 	if endEpochStr != "" {
 		endEpochValue, err := strconv.ParseUint(endEpochStr, 10, 64)
 		if err != nil {
-			logger.Errorw("error parsing query param for faults request", "err", err, "endEpoch", endEpochStr)
+			logger.Errorw("error parsing query param for stats request", "err", err, "endEpoch", endEpochStr)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -144,7 +144,7 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 	if epochSpanForFaultsWindow != "" {
 		epochSpanValue, err := strconv.ParseUint(epochSpanForFaultsWindow, 10, 64)
 		if err != nil {
-			logger.Errorw("error parsing query param for faults request", "err", err, "epochSpan", epochSpanForFaultsWindow)
+			logger.Errorw("error parsing query param for stats request", "err", err, "epochSpan", epochSpanForFaultsWindow)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -153,23 +153,23 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 
 	currentEpoch := s.currentEpoch()
 	startEpoch, endEpoch := computeSpanFromRequest(startEpochRequest, endEpochRequest, epochSpanRequest, currentEpoch)
-	faults := s.analyzer.GetFaults(startEpoch, endEpoch)
+	stats := s.analyzer.GetStats(startEpoch, endEpoch)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	response := FaultsResponse{
+	response := StatsResponse{
 		Span: Span{
 			Start: startEpoch,
 			End:   endEpoch,
 		},
-		FaultRecord: faults,
+		RelayStats: stats,
 	}
 	encoder := json.NewEncoder(w)
 	encoder.SetIndent("", "  ")
 	err := encoder.Encode(response)
 	if err != nil {
-		logger.Errorw("could not encode relay faults", "error", err)
+		logger.Errorw("could not encode relay stats", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -318,8 +318,8 @@ func (s *Server) Run(ctx context.Context) error {
 	logger.Infof("API server listening on %s", host)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", get(s.handleFaultsRequest))
-	mux.HandleFunc(GetFaultEndpoint, get(s.handleFaultsRequest))
+	mux.HandleFunc("/", get(s.handleStatsRequest))
+	mux.HandleFunc(GetFaultEndpoint, get(s.handleStatsRequest))
 	mux.HandleFunc(RegisterValidatorEndpoint, post(s.handleRegisterValidator))
 	mux.HandleFunc(PostAuctionTranscriptEndpoint, post(s.handleAuctionTranscript))
 	return http.ListenAndServe(host, mux)

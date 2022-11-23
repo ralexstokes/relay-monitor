@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ralexstokes/relay-monitor/pkg/analysis"
 	"github.com/ralexstokes/relay-monitor/pkg/api"
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
@@ -70,8 +71,11 @@ func New(ctx context.Context, config *Config, zapLogger *zap.Logger) (*Monitor, 
 	events := make(chan data.Event, eventBufferSize)
 	collector := data.NewCollector(zapLogger, relays, clock, consensusClient, events)
 	store := store.NewMemoryStore()
-	analyzer := analysis.NewAnalyzer(zapLogger, relays, events, store, consensusClient, clock)
-
+	executionClient, err := ethclient.DialContext(ctx, config.Execution.Endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("could not instantiate execution client: %v", err)
+	}
+	analyzer := analysis.NewAnalyzer(zapLogger, relays, events, store, consensusClient, clock, executionClient)
 	apiServer := api.New(config.Api, zapLogger, analyzer, events, clock, store, consensusClient)
 	return &Monitor{
 		logger:    zapLogger,

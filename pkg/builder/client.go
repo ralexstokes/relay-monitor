@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -86,4 +87,27 @@ func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.
 	var bid boostTypes.GetHeaderResponse
 	err = json.NewDecoder(resp.Body).Decode(&bid)
 	return bid.Data, err
+}
+
+func (c *Client) GetExecutionPayload(block *types.SignedBlindedBeaconBlock) (*types.ExecutionPayload, error) {
+	url := c.endpoint + "/eth/v1/builder/blinded_blocks"
+	buf, err := json.Marshal(block)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(buf))
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get payload with HTTP status code %d", resp.StatusCode)
+	}
+
+	var payload boostTypes.GetPayloadResponse
+	err = json.NewDecoder(resp.Body).Decode(&payload)
+	return payload.Data, err
 }
