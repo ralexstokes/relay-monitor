@@ -293,7 +293,7 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 		// TODO: process bid as well as rest of transcript
 	}
 
-	if *existingBid != transcript.Bid {
+	if existingBid != nil && *existingBid != transcript.Bid {
 		logger.Warnw("provided bid from transcript did not match existing bid, will continue full analysis", "context", bidCtx)
 
 		// TODO: process bid as well as rest of transcript
