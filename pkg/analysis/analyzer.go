@@ -2,8 +2,11 @@ package analysis
 
 import (
 	"context"
+	"math/big"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/holiman/uint256"
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
@@ -25,25 +28,32 @@ type Analyzer struct {
 
 	store           store.Storer
 	consensusClient *consensus.Client
+	executionClient *ethclient.Client
 	clock           *consensus.Clock
+	relays          map[types.PublicKey]*builder.Client
 
 	relayStats RelayStats
 	statsLock  sync.Mutex
 }
 
-func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan data.Event, store store.Storer, consensusClient *consensus.Client, clock *consensus.Clock) *Analyzer {
+func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan data.Event, store store.Storer, consensusClient *consensus.Client, clock *consensus.Clock, executionClient *ethclient.Client) *Analyzer {
 	relayStats := make(RelayStats)
+	relayClients := make(map[types.PublicKey]*builder.Client)
 	for _, relay := range relays {
 		relayStats[relay.PublicKey] = &Stats{
 			Faults: make(map[types.BidContext]FaultRecord),
 		}
+		relayClients[relay.PublicKey] = relay
 	}
+
 	return &Analyzer{
 		logger:          logger,
 		events:          events,
 		store:           store,
 		consensusClient: consensusClient,
+		executionClient: executionClient,
 		clock:           clock,
+		relays:          relayClients,
 		relayStats:      relayStats,
 	}
 }
@@ -51,6 +61,8 @@ func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan dat
 func (a *Analyzer) GetStats(start, end types.Epoch) RelayStats {
 	a.statsLock.Lock()
 	defer a.statsLock.Unlock()
+
+	// TODO scope response to `start` and `end`
 
 	stats := make(RelayStats)
 	for relay, summary := range a.relayStats {
@@ -211,6 +223,7 @@ func (a *Analyzer) processBid(ctx context.Context, event *data.BidEvent) {
 	}
 
 	// TODO persist analysis results
+
 	relayID := bidCtx.RelayPublicKey
 	a.statsLock.Lock()
 	stats := a.relayStats[relayID]
@@ -288,48 +301,71 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 		ProposerPublicKey: *proposerPublicKey,
 		RelayPublicKey:    bid.Pubkey,
 	}
-	existingBid, err := a.store.GetBid(ctx, bidCtx)
-	if err != nil {
-		logger.Warnw("could not find existing bid, will continue full analysis", "context", bidCtx)
 
-		// TODO: process bid as well as rest of transcript
-	}
+	// TODO consider how to reconcile with the bid we likely also collected for this slot so we do not duplicate work
 
-	if existingBid != nil && *existingBid != transcript.Bid {
-		logger.Warnw("provided bid from transcript did not match existing bid, will continue full analysis", "context", bidCtx)
+	a.processBid(ctx, &data.BidEvent{
+		Context: bidCtx,
+		Bid:     &transcript.Bid,
+	})
 
-		// TODO: process bid as well as rest of transcript
-	}
-
-	// TODO also store bid if missing?
 	err = a.store.PutAcceptance(ctx, bidCtx, signedBlindedBeaconBlock)
 	if err != nil {
 		logger.Warnf("could not store bid acceptance data: %+v", event)
 		return
 	}
 
-	// verify later w/ full payload:
-	// (claimed) Value, including fee recipient
-	// expectedFeeRecipient := registration.Message.FeeRecipient
-	// if expectedFeeRecipient != header.FeeRecipient {
-	// 	return &InvalidBid{
-	// 		Reason: "invalid fee recipient",
-	// 		Type:   InvalidBidIgnoredPreferencesType,
-	// 		Context: map[string]interface{}{
-	// 			"expected fee recipient":  expectedFeeRecipient,
-	// 			"fee recipient in header": header.FeeRecipient,
-	// 		},
-	// 	}, nil
-	// }
+	relay, ok := a.relays[bidCtx.RelayPublicKey]
+	if !ok {
+		logger.Warnf("found public key for unknown relay while processing %+v", event)
+		return
+	}
 
-	// BlockHash
-	// StateRoot
-	// ReceiptsRoot
-	// LogsBloom
-	// TransactionsRoot
+	_, err = relay.GetExecutionPayload(signedBlindedBeaconBlock)
+	if err != nil {
+		logger.Warnf("could not get payload for bid", event)
+		// TODO record payload withholding, maybe
+		return
+	}
 
-	// TODO save analysis results
+	blockHash := signedBlindedBeaconBlock.Message.Body.ExecutionPayloadHeader.BlockHash
+	_, err = a.executionClient.BlockByHash(ctx, common.Hash(blockHash))
+	if err != nil {
+		// TODO wait for ndde to sync...
+		// also; if timeout, then raise withholding fault
+		logger.Warnf("could not get payload for signed block", event)
+		return
+	}
 
+	registration, err := store.GetLatestValidatorRegistration(ctx, a.store, proposerPublicKey)
+	if err != nil {
+		logger.Warnf("could not get registration for validator while analyzing transcript", event)
+		return
+	}
+	feeRecipient := registration.Message.FeeRecipient
+
+	blockNumber := signedBlindedBeaconBlock.Message.Body.ExecutionPayloadHeader.BlockNumber
+
+	prevBalance, err := a.executionClient.BalanceAt(ctx, common.Address(feeRecipient), big.NewInt(int64(blockNumber-1)))
+	if err != nil {
+		logger.Warnf("could not get previous balance for fee recipient while analyzing transcript", event)
+		return
+	}
+
+	currentBalance, err := a.executionClient.BalanceAt(ctx, common.Address(feeRecipient), big.NewInt(int64(blockNumber)))
+	if err != nil {
+		logger.Warnf("could not get current balance for fee recipient while analyzing transcript", event)
+		return
+	}
+
+	diff := currentBalance.Sub(currentBalance, prevBalance)
+	valueClaimed := bid.Value.BigInt()
+
+	if diff.Cmp(valueClaimed) != 0 {
+		// TODO raise payment fault
+		logger.Warnf("value paid did not match bid value while analyzing transcript", event)
+		return
+	}
 }
 
 func (a *Analyzer) Run(ctx context.Context) error {
