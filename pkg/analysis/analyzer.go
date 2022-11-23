@@ -324,7 +324,7 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 
 	_, err = relay.GetExecutionPayload(signedBlindedBeaconBlock)
 	if err != nil {
-		logger.Warnf("could not get payload for bid", event)
+		logger.Warnf("could not get payload for bid: %s, %+v", err, event)
 		// TODO record payload withholding, maybe
 		return
 	}
@@ -339,13 +339,13 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 	if err != nil {
 		// TODO wait for ndde to sync...
 		// also; if timeout, then raise withholding fault
-		logger.Warnf("could not get payload for signed block, %+v", event)
+		logger.Warnf("could not get payload for signed block: %s, %+v", err, event)
 		return
 	}
 
 	registration, err := store.GetLatestValidatorRegistration(ctx, a.store, proposerPublicKey)
 	if err != nil {
-		logger.Warnf("could not get registration for validator while analyzing transcript: %+v", event)
+		logger.Warnf("could not get registration for validator while analyzing transcript: %s, %+v", err, event)
 		return
 	}
 	feeRecipient := registration.Message.FeeRecipient
@@ -354,13 +354,13 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 
 	prevBalance, err := a.executionClient.BalanceAt(ctx, common.Address(feeRecipient), big.NewInt(int64(blockNumber-1)))
 	if err != nil {
-		logger.Warnf("could not get previous balance for fee recipient while analyzing transcript: %+v", event)
+		logger.Warnf("could not get previous balance for fee recipient while analyzing transcript: %s, %+v", err, event)
 		return
 	}
 
 	currentBalance, err := a.executionClient.BalanceAt(ctx, common.Address(feeRecipient), big.NewInt(int64(blockNumber)))
 	if err != nil {
-		logger.Warnf("could not get current balance for fee recipient while analyzing transcript: %+v", event)
+		logger.Warnf("could not get current balance for fee recipient while analyzing transcript: %s, %+v", err, event)
 		return
 	}
 
