@@ -27,14 +27,16 @@ type Analyzer struct {
 	consensusClient *consensus.Client
 	clock           *consensus.Clock
 
-	faults     FaultRecord
-	faultsLock sync.Mutex
+	relayStats RelayStats
+	statsLock  sync.Mutex
 }
 
 func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan data.Event, store store.Storer, consensusClient *consensus.Client, clock *consensus.Clock) *Analyzer {
-	faults := make(FaultRecord)
+	relayStats := make(RelayStats)
 	for _, relay := range relays {
-		faults[relay.PublicKey] = &Faults{}
+		relayStats[relay.PublicKey] = &Stats{
+			Faults: make(map[types.BidContext]FaultRecord),
+		}
 	}
 	return &Analyzer{
 		logger:          logger,
@@ -42,21 +44,21 @@ func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan dat
 		store:           store,
 		consensusClient: consensusClient,
 		clock:           clock,
-		faults:          faults,
+		relayStats:      relayStats,
 	}
 }
 
-func (a *Analyzer) GetFaults(start, end types.Epoch) FaultRecord {
-	a.faultsLock.Lock()
-	defer a.faultsLock.Unlock()
+func (a *Analyzer) GetStats(start, end types.Epoch) RelayStats {
+	a.statsLock.Lock()
+	defer a.statsLock.Unlock()
 
-	faults := make(FaultRecord)
-	for relay, summary := range a.faults {
+	stats := make(RelayStats)
+	for relay, summary := range a.relayStats {
 		summary := *summary
-		faults[relay] = &summary
+		stats[relay] = &summary
 	}
 
-	return faults
+	return stats
 }
 
 func (a *Analyzer) validateGasLimit(ctx context.Context, gasLimit uint64, gasLimitPreference uint64, blockNumber uint64) (bool, error) {
@@ -208,26 +210,26 @@ func (a *Analyzer) processBid(ctx context.Context, event *data.BidEvent) {
 		return
 	}
 
-	// TODO scope faults by coordinate
 	// TODO persist analysis results
 	relayID := bidCtx.RelayPublicKey
-	a.faultsLock.Lock()
-	faults := a.faults[relayID]
+	a.statsLock.Lock()
+	stats := a.relayStats[relayID]
 	if bid != nil {
-		faults.TotalBids += 1
+		stats.TotalBids += 1
 	}
 	if result != nil {
+		faults := stats.Faults[*bidCtx]
 		switch result.Type {
 		case InvalidBidConsensusType:
-			faults.ConsensusInvalidBids += 1
+			faults.ConsensusInvalidBids = 1
 		case InvalidBidIgnoredPreferencesType:
-			faults.IgnoredPreferencesBids += 1
+			faults.IgnoredPreferencesBids = 1
 		default:
 			logger.Warnf("could not interpret bid analysis result: %+v, %+v", event, result)
 			return
 		}
 	}
-	a.faultsLock.Unlock()
+	a.statsLock.Unlock()
 	if result != nil {
 		logger.Debugf("invalid bid: %+v, %+v", result, event)
 	} else {
