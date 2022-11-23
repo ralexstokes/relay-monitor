@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 )
@@ -18,6 +19,8 @@ type Storer interface {
 }
 
 type MemoryStore struct {
+	sync.RWMutex
+
 	bids          map[types.BidContext]*types.Bid
 	registrations map[types.PublicKey][]types.SignedValidatorRegistration
 	acceptances   map[types.BidContext]types.SignedBlindedBeaconBlock
@@ -32,11 +35,17 @@ func NewMemoryStore() *MemoryStore {
 }
 
 func (s *MemoryStore) PutBid(ctx context.Context, bidCtx *types.BidContext, bid *types.Bid) error {
+	s.Lock()
+	defer s.Unlock()
+
 	s.bids[*bidCtx] = bid
 	return nil
 }
 
 func (s *MemoryStore) GetBid(ctx context.Context, bidCtx *types.BidContext) (*types.Bid, error) {
+	s.RLock()
+	defer s.RUnlock()
+
 	bid, ok := s.bids[*bidCtx]
 	if !ok {
 		return nil, fmt.Errorf("could not find bid for %+v", bidCtx)
@@ -45,6 +54,9 @@ func (s *MemoryStore) GetBid(ctx context.Context, bidCtx *types.BidContext) (*ty
 }
 
 func (s *MemoryStore) PutValidatorRegistration(ctx context.Context, registration *types.SignedValidatorRegistration) error {
+	s.Lock()
+	defer s.Unlock()
+
 	publicKey := registration.Message.Pubkey
 	registrations := s.registrations[publicKey]
 	registrations = append(registrations, *registration)
@@ -53,10 +65,16 @@ func (s *MemoryStore) PutValidatorRegistration(ctx context.Context, registration
 }
 
 func (s *MemoryStore) PutAcceptance(ctx context.Context, bidCtx *types.BidContext, acceptance *types.SignedBlindedBeaconBlock) error {
+	s.Lock()
+	defer s.Unlock()
+
 	s.acceptances[*bidCtx] = *acceptance
 	return nil
 }
 
 func (s *MemoryStore) GetValidatorRegistrations(ctx context.Context, publicKey *types.PublicKey) ([]types.SignedValidatorRegistration, error) {
+	s.RLock()
+	defer s.RUnlock()
+
 	return s.registrations[*publicKey], nil
 }
