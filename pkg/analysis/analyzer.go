@@ -219,14 +219,14 @@ func (a *Analyzer) processBid(ctx context.Context, event *data.BidEvent) {
 	a.faultsLock.Lock()
 	faults := a.faults[relayID]
 	if bid != nil {
-		faults.TotalBids += 1
+		faults.Stats.TotalBids += 1
 	}
 	if result != nil {
 		switch result.Type {
 		case InvalidBidConsensusType:
-			faults.ConsensusInvalidBids += 1
+			faults.Stats.ConsensusInvalidBids += 1
 		case InvalidBidIgnoredPreferencesType:
-			faults.IgnoredPreferencesBids += 1
+			faults.Stats.IgnoredPreferencesBids += 1
 		default:
 			logger.Warnf("could not interpret bid analysis result: %+v, %+v", event, result)
 			return
