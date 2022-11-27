@@ -36,7 +36,7 @@ func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan dat
 	for _, relay := range relays {
 		faults[relay.PublicKey] = &Faults{
 			Stats: &FaultStats{},
-			Misc: &Misc{
+			Meta: &Meta{
 				Endpoint: relay.Hostname(),
 			},
 		}

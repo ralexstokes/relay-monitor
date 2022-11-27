@@ -159,7 +159,7 @@ NOTE: if neither parameter is provided, the response will be `256` epochs behind
             "consensus_invalid_payloads": 1,
             "unavailable_payloads": 10
         },
-        "misc": {
+        "meta": {
             "endpoint": "builder-relay-sepolia.flashbots.net"
         }
     }

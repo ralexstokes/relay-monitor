@@ -6,7 +6,7 @@ type FaultRecord = map[types.PublicKey]*Faults
 
 type Faults struct {
 	Stats *FaultStats `json:"stats"`
-	Misc  *Misc       `json:"misc"`
+	Meta  *Meta       `json:"meta"`
 }
 
 type FaultStats struct {
@@ -21,6 +21,6 @@ type FaultStats struct {
 	UnavailablePayloads      uint `json:"unavailable_payloads"`
 }
 
-type Misc struct {
+type Meta struct {
 	Endpoint string `json:"endpoint"`
 }
