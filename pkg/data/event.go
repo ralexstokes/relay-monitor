@@ -8,7 +8,8 @@ type Event struct {
 
 type BidEvent struct {
 	Context *types.BidContext
-	Bid     *types.Bid
+	// A `nil` `Bid` indicates absence for the given `Context`
+	Bid *types.Bid
 }
 
 type ValidatorRegistrationEvent struct {

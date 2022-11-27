@@ -27,9 +27,8 @@ const (
 )
 
 type Config struct {
-	Host            string `yaml:"host"`
-	Port            uint16 `yaml:"port"`
-	SignatureDomain crypto.Domain
+	Host string `yaml:"host"`
+	Port uint16 `yaml:"port"`
 }
 
 type Span struct {
@@ -194,7 +193,7 @@ func (s *Server) validateRegistrationTimestamp(registration, currentRegistration
 
 func (s *Server) validateRegistrationSignature(registration *types.SignedValidatorRegistration) error {
 	msg := registration.Message
-	valid, err := crypto.VerifySignature(msg, s.config.SignatureDomain, msg.Pubkey[:], registration.Signature[:])
+	valid, err := crypto.VerifySignature(msg, s.consensusClient.SignatureDomainForBuilder(), msg.Pubkey[:], registration.Signature[:])
 	if err != nil {
 		return err
 	}
@@ -281,8 +280,6 @@ func (s *Server) handleRegisterValidator(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
-
-	logger.Debugw("got validator registrations", "data", registrations)
 
 	payload := data.ValidatorRegistrationEvent{
 		Registrations: registrations,

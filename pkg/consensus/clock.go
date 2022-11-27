@@ -21,7 +21,7 @@ func NewClock(genesisTime, secondsPerSlot, slotsPerEpoch uint64) *Clock {
 	}
 }
 
-func (c *Clock) slotInSeconds(slot types.Slot) int64 {
+func (c *Clock) SlotInSeconds(slot types.Slot) int64 {
 	return int64(slot*c.secondsPerSlot + c.genesisTime)
 }
 
@@ -46,7 +46,7 @@ func (c *Clock) TickSlots(ctx context.Context) chan types.Slot {
 			currentSlot := c.CurrentSlot(now)
 			ch <- currentSlot
 			nextSlot := currentSlot + 1
-			nextSlotStart := c.slotInSeconds(nextSlot)
+			nextSlotStart := c.SlotInSeconds(nextSlot)
 			duration := time.Duration(nextSlotStart - now)
 			select {
 			case <-time.After(duration * time.Second):

@@ -73,24 +73,25 @@ func (c *Client) GetStatus() error {
 }
 
 // GetBid implements the `getHeader` endpoint in the Builder API
-func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.PublicKey) (*types.Bid, bool, error) {
+// A return value of `(nil, nil)` indicates the relay was reachable but had no bid for the given parameters
+func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.PublicKey) (*types.Bid, error) {
 	bidUrl := c.endpoint + fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot, parentHash, publicKey)
 	req, err := http.NewRequest(http.MethodGet, bidUrl, nil)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	if resp.StatusCode == http.StatusNoContent {
-		return nil, false, nil
+		return nil, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, false, fmt.Errorf("failed to get bid with HTTP status code %d", resp.StatusCode)
+		return nil, fmt.Errorf("failed to get bid with HTTP status code %d", resp.StatusCode)
 	}
 
 	var bid boostTypes.GetHeaderResponse
 	err = json.NewDecoder(resp.Body).Decode(&bid)
-	return bid.Data, true, err
+	return bid.Data, err
 }
