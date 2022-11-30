@@ -15,8 +15,13 @@ const clientTimeoutSec = 2
 
 type Client struct {
 	endpoint  string
+	hostname  string
 	PublicKey types.PublicKey
 	client    http.Client
+}
+
+func (c *Client) Hostname() string {
+	return c.hostname
 }
 
 func (c *Client) String() string {
@@ -28,6 +33,8 @@ func NewClient(endpoint string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	hostname := u.Hostname()
 
 	publicKeyStr := u.User.Username()
 	var publicKey types.PublicKey
@@ -41,6 +48,7 @@ func NewClient(endpoint string) (*Client, error) {
 	}
 	return &Client{
 		endpoint:  endpoint,
+		hostname:  hostname,
 		PublicKey: publicKey,
 		client:    client,
 	}, nil
