@@ -30,8 +30,9 @@ type AuctionTranscript struct {
 }
 
 type BidContext struct {
-	Slot              Slot      `json:"slot"`
-	ParentHash        Hash      `json:"parent_hash"`
-	ProposerPublicKey PublicKey `json:"proposer_public_key"`
-	RelayPublicKey    PublicKey `json:"relay_public_key"`
+	Slot              Slot      `json:"slot,omitempty"`
+	ParentHash        Hash      `json:"parent_hash,omitempty"`
+	ProposerPublicKey PublicKey `json:"proposer_public_key,omitempty"`
+	RelayPublicKey    PublicKey `json:"relay_public_key,omitempty"`
+	Error             error     `json:"error,omitempty"`
 }

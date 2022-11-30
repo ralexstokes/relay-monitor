@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
@@ -34,35 +35,12 @@ func NewCollector(zapLogger *zap.Logger, relays []*builder.Client, clock *consen
 	}
 }
 
-func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Client, slot types.Slot) (*BidEvent, error) {
+func (c *Collector) outputBid(event *BidEvent, duration *uint64, relay *builder.Client) {
 	logger := c.logger.Sugar()
-
-	parentHash, err := c.consensusClient.GetParentHash(ctx, slot)
-	if err != nil {
-		return nil, err
-	}
-	publicKey, err := c.consensusClient.GetProposerPublicKey(ctx, slot)
-	if err != nil {
-		return nil, err
-	}
-	bid, duration, err := relay.GetBid(slot, parentHash, *publicKey)
-	if err != nil {
-		return nil, err
-	}
-	if bid == nil {
-		return nil, nil
-	}
-	bidCtx := types.BidContext{
-		Slot:              slot,
-		ParentHash:        parentHash,
-		ProposerPublicKey: *publicKey,
-		RelayPublicKey:    relay.PublicKey,
-	}
-	event := &BidEvent{Context: &bidCtx, Bid: bid}
 
 	out := &Output{
 		Timestamp: time.Now(),
-		Rtt:       duration,
+		Rtt:       *duration,
 		Bid:       *event,
 		Relay:     relay.Endpoint(),
 		Region:    c.region,
@@ -78,6 +56,71 @@ func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Clie
 			logger.Warnw("unable to write output", "error", err)
 		}
 	}
+}
+
+func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Client, slot types.Slot) (*BidEvent, error) {
+	// logger := c.logger.Sugar()
+	var duration *uint64 = new(uint64)
+	// *duration = 0
+	var bid *types.Bid
+
+	bidCtx := types.BidContext{
+		Slot: slot,
+		// ParentHash:        parentHash,
+		// ProposerPublicKey: *publicKey,
+		RelayPublicKey: relay.PublicKey,
+	}
+
+	event := &BidEvent{}
+	defer c.outputBid(event, duration, relay)
+
+	parentHash, err := c.consensusClient.GetParentHash(ctx, slot)
+	if err != nil {
+		bidCtx.Error = err
+		return nil, err
+	}
+	bidCtx.ParentHash = parentHash
+
+	publicKey, err := c.consensusClient.GetProposerPublicKey(ctx, slot)
+	if err != nil {
+		bidCtx.Error = err
+		return nil, err
+	}
+	bidCtx.ProposerPublicKey = *publicKey
+
+	bid, *duration, err = relay.GetBid(slot, parentHash, *publicKey)
+	if err != nil {
+		bidCtx.Error = err
+		return nil, err
+	}
+	if bid == nil {
+		bidCtx.Error = fmt.Errorf("no bid returned")
+		return nil, nil
+	}
+
+	event.Context = &bidCtx
+	event.Bid = bid
+
+	// event := &BidEvent{Context: &bidCtx, Bid: bid}
+
+	// out := &Output{
+	// 	Timestamp: time.Now(),
+	// 	Rtt:       duration,
+	// 	Bid:       *event,
+	// 	Relay:     relay.Endpoint(),
+	// 	Region:    c.region,
+	// }
+
+	// outBytes, err := json.Marshal(out)
+	// if err != nil {
+	// 	logger.Warnw("unable to marshal outout", "error", err, "content", out)
+	// } else {
+	// 	outBytes = append(outBytes, []byte("\n")...)
+	// 	err = c.output.WriteEntry(outBytes)
+	// 	if err != nil {
+	// 		logger.Warnw("unable to write output", "error", err)
+	// 	}
+	// }
 
 	return event, nil
 }

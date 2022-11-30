@@ -3,6 +3,7 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"time"
@@ -85,7 +86,8 @@ func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.
 		return nil, 0, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, 0, fmt.Errorf("failed to get bid with HTTP status code %d", resp.StatusCode)
+		rspBytes, _ := ioutil.ReadAll(resp.Body)
+		return nil, 0, fmt.Errorf("failed to get bid with HTTP status code %d, body: %s", resp.StatusCode, string(rspBytes))
 	}
 
 	var bid boostTypes.GetHeaderResponse
