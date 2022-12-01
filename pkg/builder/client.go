@@ -74,23 +74,27 @@ func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.
 	bidUrl := c.endpoint + fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot, parentHash, publicKey)
 	req, err := http.NewRequest(http.MethodGet, bidUrl, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, &types.ClientError{Type: types.RelayError, Code: 500, Message: err.Error()}
 	}
 	start := time.Now()
 	resp, err := c.client.Do(req)
 	duration := time.Since(start).Milliseconds()
+	// err = fmt.Errorf("intentional error")
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, &types.ClientError{Type: types.RelayError, Code: 500, Message: err.Error()}
 	}
 	if resp.StatusCode == http.StatusNoContent {
 		return nil, 0, nil
 	}
 	if resp.StatusCode != http.StatusOK {
 		rspBytes, _ := ioutil.ReadAll(resp.Body)
-		return nil, 0, fmt.Errorf("failed to get bid with HTTP status code %d, body: %s", resp.StatusCode, string(rspBytes))
+		return nil, 0, &types.ClientError{Type: types.RelayError, Code: resp.StatusCode, Message: string(rspBytes)}
 	}
 
 	var bid boostTypes.GetHeaderResponse
 	err = json.NewDecoder(resp.Body).Decode(&bid)
+	if err != nil {
+		return bid.Data, uint64(duration), &types.ClientError{Type: types.RelayError, Code: 500, Message: err.Error()}
+	}
 	return bid.Data, uint64(duration), err
 }

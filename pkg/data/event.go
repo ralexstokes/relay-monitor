@@ -11,9 +11,10 @@ type Event struct {
 }
 
 type BidEvent struct {
-	Context *types.BidContext
+	Context *types.BidContext `json:",omitempty"`
+	Bid     *types.Bid        `json:",omitempty"`
 	// A `nil` `Bid` indicates absence for the given `Context`
-	Bid *types.Bid
+
 }
 
 type ValidatorRegistrationEvent struct {
@@ -25,9 +26,9 @@ type AuctionTranscriptEvent struct {
 }
 
 type Output struct {
-	Timestamp time.Time
-	Rtt       uint64
-	Relay     string
-	Region    string
-	Bid       BidEvent
+	Timestamp time.Time `json:",omitempty"`
+	Rtt       uint64    `json:",omitempty"`
+	Relay     string    `json:",omitempty"`
+	Region    string    `json:",omitempty"`
+	Bid       BidEvent  `json:",omitempty"`
 }

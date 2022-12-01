@@ -3,7 +3,6 @@ package data
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
@@ -36,54 +35,56 @@ func NewCollector(zapLogger *zap.Logger, relays []*builder.Client, clock *consen
 }
 
 func (c *Collector) outputBid(event *BidEvent, duration *uint64, relay *builder.Client) {
-	logger := c.logger.Sugar()
 
-	out := &Output{
-		Timestamp: time.Now(),
-		Rtt:       *duration,
-		Bid:       *event,
-		Relay:     relay.Endpoint(),
-		Region:    c.region,
-	}
+	go func() {
+		logger := c.logger.Sugar()
 
-	outBytes, err := json.Marshal(out)
-	if err != nil {
-		logger.Warnw("unable to marshal outout", "error", err, "content", out)
-	} else {
-		outBytes = append(outBytes, []byte("\n")...)
-		err = c.output.WriteEntry(outBytes)
-		if err != nil {
-			logger.Warnw("unable to write output", "error", err)
+		out := &Output{
+			Timestamp: time.Now(),
+			Rtt:       *duration,
+			Bid:       *event,
+			Relay:     relay.Endpoint(),
+			Region:    c.region,
 		}
-	}
+
+		outBytes, err := json.Marshal(out)
+		if err != nil {
+			logger.Warnw("unable to marshal outout", "error", err, "content", out)
+		} else {
+			outBytes = append(outBytes, []byte("\n")...)
+			err = c.output.WriteEntry(outBytes)
+			if err != nil {
+				logger.Warnw("unable to write output", "error", err)
+			}
+		}
+	}()
 }
 
 func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Client, slot types.Slot) (*BidEvent, error) {
-	// logger := c.logger.Sugar()
+	logger := c.logger.Sugar()
 	var duration *uint64 = new(uint64)
-	// *duration = 0
 	var bid *types.Bid
 
 	bidCtx := types.BidContext{
-		Slot: slot,
-		// ParentHash:        parentHash,
-		// ProposerPublicKey: *publicKey,
+		Slot:           slot,
 		RelayPublicKey: relay.PublicKey,
 	}
 
-	event := &BidEvent{}
+	event := &BidEvent{
+		Context: &bidCtx,
+	}
 	defer c.outputBid(event, duration, relay)
 
 	parentHash, err := c.consensusClient.GetParentHash(ctx, slot)
 	if err != nil {
-		bidCtx.Error = err
+		bidCtx.Error = &types.ClientError{Type: types.ParentHashErr, Code: 500, Message: "Unable to get parent hash"}
 		return nil, err
 	}
 	bidCtx.ParentHash = parentHash
 
 	publicKey, err := c.consensusClient.GetProposerPublicKey(ctx, slot)
 	if err != nil {
-		bidCtx.Error = err
+		bidCtx.Error = &types.ClientError{Type: types.PubKeyErr, Code: 500, Message: "Unable to get proposer public key"}
 		return nil, err
 	}
 	bidCtx.ProposerPublicKey = *publicKey
@@ -94,33 +95,12 @@ func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Clie
 		return nil, err
 	}
 	if bid == nil {
-		bidCtx.Error = fmt.Errorf("no bid returned")
+		logger.Info("No bid returned")
+		bidCtx.Error = &types.ClientError{Type: types.EmptyBidError, Code: 204, Message: "No bid returned"}
 		return nil, nil
 	}
 
-	event.Context = &bidCtx
 	event.Bid = bid
-
-	// event := &BidEvent{Context: &bidCtx, Bid: bid}
-
-	// out := &Output{
-	// 	Timestamp: time.Now(),
-	// 	Rtt:       duration,
-	// 	Bid:       *event,
-	// 	Relay:     relay.Endpoint(),
-	// 	Region:    c.region,
-	// }
-
-	// outBytes, err := json.Marshal(out)
-	// if err != nil {
-	// 	logger.Warnw("unable to marshal outout", "error", err, "content", out)
-	// } else {
-	// 	outBytes = append(outBytes, []byte("\n")...)
-	// 	err = c.output.WriteEntry(outBytes)
-	// 	if err != nil {
-	// 		logger.Warnw("unable to write output", "error", err)
-	// 	}
-	// }
 
 	return event, nil
 }

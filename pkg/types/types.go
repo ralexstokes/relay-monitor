@@ -1,6 +1,8 @@
 package types
 
 import (
+	"fmt"
+
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/holiman/uint256"
 )
@@ -35,4 +37,23 @@ type BidContext struct {
 	ProposerPublicKey PublicKey `json:"proposer_public_key,omitempty"`
 	RelayPublicKey    PublicKey `json:"relay_public_key,omitempty"`
 	Error             error     `json:"error,omitempty"`
+}
+
+type ErrorType string
+
+const (
+	ParentHashErr ErrorType = "ParentHashError"
+	PubKeyErr     ErrorType = "PublicKeyError"
+	EmptyBidError ErrorType = "EmptyBidError"
+	RelayError    ErrorType = "RelayError"
+)
+
+type ClientError struct {
+	Type    ErrorType `json:"errorType,omitempty"`
+	Code    int       `json:"code,omitempty"`
+	Message string    `json:"message,omitempty"`
+}
+
+func (e *ClientError) Error() string {
+	return fmt.Sprintf("Type: %s Code: %d Message: %s", e.Type, e.Code, e.Message)
 }
