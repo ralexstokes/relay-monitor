@@ -34,50 +34,73 @@ func NewCollector(zapLogger *zap.Logger, relays []*builder.Client, clock *consen
 	}
 }
 
+func (c *Collector) outputBid(event *BidEvent, duration *uint64, relay *builder.Client) {
+
+	go func() {
+		logger := c.logger.Sugar()
+
+		out := &Output{
+			Timestamp: time.Now(),
+			Rtt:       *duration,
+			Bid:       *event,
+			Relay:     relay.Endpoint(),
+			Region:    c.region,
+		}
+
+		outBytes, err := json.Marshal(out)
+		if err != nil {
+			logger.Warnw("unable to marshal outout", "error", err, "content", out)
+		} else {
+			outBytes = append(outBytes, []byte("\n")...)
+			err = c.output.WriteEntry(outBytes)
+			if err != nil {
+				logger.Warnw("unable to write output", "error", err)
+			}
+		}
+	}()
+}
+
 func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Client, slot types.Slot) (*BidEvent, error) {
 	logger := c.logger.Sugar()
+	var duration *uint64 = new(uint64)
+	var bid *types.Bid
+
+	bidCtx := types.BidContext{
+		Slot:           slot,
+		RelayPublicKey: relay.PublicKey,
+	}
+
+	event := &BidEvent{
+		Context: &bidCtx,
+	}
+	defer c.outputBid(event, duration, relay)
 
 	parentHash, err := c.consensusClient.GetParentHash(ctx, slot)
 	if err != nil {
+		bidCtx.Error = &types.ClientError{Type: types.ParentHashErr, Code: 500, Message: "Unable to get parent hash"}
 		return nil, err
 	}
+	bidCtx.ParentHash = parentHash
+
 	publicKey, err := c.consensusClient.GetProposerPublicKey(ctx, slot)
 	if err != nil {
+		bidCtx.Error = &types.ClientError{Type: types.PubKeyErr, Code: 500, Message: "Unable to get proposer public key"}
 		return nil, err
 	}
-	bid, exists, duration, err := relay.GetBid(slot, parentHash, *publicKey)
+	bidCtx.ProposerPublicKey = *publicKey
+
+	bid, *duration, err = relay.GetBid(slot, parentHash, *publicKey)
 	if err != nil {
+		bidCtx.Error = err
 		return nil, err
 	}
-	if !exists {
+	if bid == nil {
+		logger.Info("No bid returned")
+		bidCtx.Error = &types.ClientError{Type: types.EmptyBidError, Code: 204, Message: "No bid returned"}
 		return nil, nil
 	}
-	bidCtx := types.BidContext{
-		Slot:              slot,
-		ParentHash:        parentHash,
-		ProposerPublicKey: *publicKey,
-		RelayPublicKey:    relay.PublicKey,
-	}
-	event := &BidEvent{Context: &bidCtx, Bid: bid}
 
-	out := &Output{
-		Timestamp: time.Now(),
-		Rtt:       duration,
-		Bid:       *event,
-		Relay:     relay.Endpoint(),
-		Region:    c.region,
-	}
-
-	outBytes, err := json.Marshal(out)
-	if err != nil {
-		logger.Warnw("unable to marshal outout", "error", err, "content", out)
-	} else {
-		outBytes = append(outBytes, []byte("\n")...)
-		err = c.output.WriteEntry(outBytes)
-		if err != nil {
-			logger.Warnw("unable to write output", "error", err)
-		}
-	}
+	event.Bid = bid
 
 	return event, nil
 }
@@ -111,7 +134,7 @@ func (c *Collector) collectFromRelay(ctx context.Context, relay *builder.Client)
 	}
 }
 
-func (c *Collector) syncExecutionHeads(ctx context.Context) {
+func (c *Collector) syncBlocks(ctx context.Context) {
 	logger := c.logger.Sugar()
 
 	heads := c.consensusClient.StreamHeads(ctx)
@@ -120,7 +143,7 @@ func (c *Collector) syncExecutionHeads(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case head := <-heads:
-			_, err := c.consensusClient.FetchExecutionHash(ctx, head.Slot)
+			err := c.consensusClient.FetchBlock(ctx, head.Slot)
 			if err != nil {
 				logger.Warnf("could not fetch latest execution hash for slot %d: %v", head.Slot, err)
 			}
@@ -164,7 +187,7 @@ func (c *Collector) syncValidators(ctx context.Context) {
 
 // TODO refactor this into a separate component as the list of duties is growing outside the "collector" abstraction
 func (c *Collector) collectConsensusData(ctx context.Context) {
-	go c.syncExecutionHeads(ctx)
+	go c.syncBlocks(ctx)
 	go c.syncProposers(ctx)
 	go c.syncValidators(ctx)
 }

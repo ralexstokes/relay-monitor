@@ -32,12 +32,12 @@ test-coverage:
 	go tool cover -func coverage.out
 
 cover-html:
-	go test -coverprofile=/tmp/boost-relay.cover.tmp ./...
-	go tool cover -html=/tmp/boost-relay.cover.tmp
-	unlink /tmp/boost-relay.cover.tmp
+	go test -coverprofile=/tmp/relay-monitor.cover.tmp ./...
+	go tool cover -html=/tmp/relay-monitor.cover.tmp
+	unlink /tmp/relay-monitor.cover.tmp
 
 docker-image:
-	DOCKER_BUILDKIT=1 docker build --build-arg VERSION=${VERSION} . -t flashbots/mev-boost-relay
+	DOCKER_BUILDKIT=1 docker build --build-arg VERSION=${VERSION} . -t ralexstokes/relay-monitor
 
 docker-image-amd:
-	DOCKER_BUILDKIT=1 docker build --platform linux/amd64 --build-arg VERSION=${VERSION} . -t flashbots/mev-boost-relay
+	DOCKER_BUILDKIT=1 docker build --platform linux/amd64 --build-arg VERSION=${VERSION} . -t ralexstokes/relay-monitor

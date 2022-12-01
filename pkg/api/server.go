@@ -52,13 +52,14 @@ type Server struct {
 	consensusClient *consensus.Client
 }
 
-func New(config *Config, logger *zap.Logger, analyzer *analysis.Analyzer, events chan<- data.Event, clock *consensus.Clock, consensusClient *consensus.Client) *Server {
+func New(config *Config, logger *zap.Logger, analyzer *analysis.Analyzer, events chan<- data.Event, clock *consensus.Clock, store store.Storer, consensusClient *consensus.Client) *Server {
 	return &Server{
 		config:          config,
 		logger:          logger,
 		analyzer:        analyzer,
 		events:          events,
 		clock:           clock,
+		store:           store,
 		consensusClient: consensusClient,
 	}
 }
@@ -165,6 +166,7 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 		FaultRecord: faults,
 	}
 	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
 	err := encoder.Encode(response)
 	if err != nil {
 		logger.Errorw("could not encode relay faults", "error", err)
@@ -191,7 +193,7 @@ func (s *Server) validateRegistrationTimestamp(registration, currentRegistration
 
 func (s *Server) validateRegistrationSignature(registration *types.SignedValidatorRegistration) error {
 	msg := registration.Message
-	valid, err := crypto.VerifySignature(msg, crypto.BuilderDomain, msg.Pubkey[:], registration.Signature[:])
+	valid, err := crypto.VerifySignature(msg, s.consensusClient.SignatureDomainForBuilder(), msg.Pubkey[:], registration.Signature[:])
 	if err != nil {
 		return err
 	}
@@ -278,8 +280,6 @@ func (s *Server) handleRegisterValidator(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
-
-	logger.Debugw("got validator registrations", "data", registrations)
 
 	payload := data.ValidatorRegistrationEvent{
 		Registrations: registrations,

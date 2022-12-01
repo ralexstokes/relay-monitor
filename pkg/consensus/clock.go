@@ -21,7 +21,7 @@ func NewClock(genesisTime, secondsPerSlot, slotsPerEpoch uint64) *Clock {
 	}
 }
 
-func (c *Clock) slotInSeconds(slot types.Slot) int64 {
+func (c *Clock) SlotInSeconds(slot types.Slot) int64 {
 	return int64(slot*c.secondsPerSlot + c.genesisTime)
 }
 
@@ -42,20 +42,18 @@ func (c *Clock) TickSlots(ctx context.Context) chan types.Slot {
 	ch := make(chan types.Slot, 1)
 	go func() {
 		for {
-			// TODO do not block if we are in the middle of the sleep at the end of this loop...
-			select {
-			case <-ctx.Done():
-				close(ch)
-				return
-			default:
-			}
 			now := time.Now().Unix()
 			currentSlot := c.CurrentSlot(now)
 			ch <- currentSlot
 			nextSlot := currentSlot + 1
-			nextSlotStart := c.slotInSeconds(nextSlot)
+			nextSlotStart := c.SlotInSeconds(nextSlot)
 			duration := time.Duration(nextSlotStart - now)
-			time.Sleep(duration * time.Second)
+			select {
+			case <-time.After(duration * time.Second):
+			case <-ctx.Done():
+				close(ch)
+				return
+			}
 		}
 	}()
 	return ch
@@ -75,6 +73,7 @@ func (c *Clock) TickEpochs(ctx context.Context) chan types.Epoch {
 				ch <- currentEpoch
 			}
 		}
+		close(ch)
 	}()
 	return ch
 }
