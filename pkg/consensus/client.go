@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/holiman/uint256"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/protolambda/eth2api"
 	"github.com/protolambda/eth2api/client/beaconapi"
 	"github.com/protolambda/eth2api/client/configapi"
@@ -22,6 +23,7 @@ import (
 	"github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/r3labs/sse/v2"
 	"github.com/ralexstokes/relay-monitor/pkg/crypto"
+	"github.com/ralexstokes/relay-monitor/pkg/metrics"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 	"go.uber.org/zap"
 )
@@ -112,7 +114,7 @@ func NewClient(ctx context.Context, endpoint string, logger *zap.Logger) (*Clien
 		validatorIndexCache:    validatorIndexCache,
 	}
 
-	err = client.fetchGenesis(ctx)
+	err = client.FetchGenesis(ctx)
 	if err != nil {
 		logger := client.logger.Sugar()
 		logger.Fatalf("could not load genesis info: %v", err)
@@ -169,7 +171,7 @@ func (c *Client) LoadCurrentContext(ctx context.Context, currentSlot types.Slot,
 	return nil
 }
 
-func (c *Client) fetchGenesis(ctx context.Context) error {
+func (c *Client) FetchGenesis(ctx context.Context) error {
 	var resp eth2api.GenesisResponse
 	exists, err := beaconapi.Genesis(ctx, c.client, &resp)
 	if !exists {
@@ -257,6 +259,10 @@ func (c *Client) GetValidator(publicKey *types.PublicKey) (*eth2api.ValidatorRes
 }
 
 func (c *Client) GetParentHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
+
+	t := prometheus.NewTimer(metrics.GetParentHash)
+	defer t.ObserveDuration()
+
 	targetSlot := slot - 1
 	block, err := c.GetBlock(targetSlot)
 	if err != nil {
@@ -266,6 +272,10 @@ func (c *Client) GetParentHash(ctx context.Context, slot types.Slot) (types.Hash
 }
 
 func (c *Client) GetProposerPublicKey(ctx context.Context, slot types.Slot) (*types.PublicKey, error) {
+
+	t := prometheus.NewTimer(metrics.GetProposerPubKey)
+	defer t.ObserveDuration()
+
 	validator, err := c.GetProposer(slot)
 	if err != nil {
 		// TODO consider fallback to grab the assignments for the missing epoch...
