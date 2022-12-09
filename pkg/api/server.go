@@ -26,7 +26,7 @@ const (
 	DefaultEpochSpanForFaultsWindow = 256
 
 	// Validator metrics endpoints.
-	GetValidatorsEndpoint              = "/monitor/v1/validators/"
+	GetValidatorsEndpoint              = "/monitor/v1/validators"
 	GetValidatorsRegistrationsEndpoint = "/monitor/v1/validators/registrations"
 )
 
@@ -46,11 +46,7 @@ type FaultsResponse struct {
 }
 
 type CountResponse struct {
-	Count int `json:"count"`
-}
-
-type MessageResponse struct {
-	Message string `json:"message"`
+	Count uint `json:"count"`
 }
 
 type Server struct {
@@ -251,7 +247,11 @@ func (s *Server) respondError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	response := apiError{code, message}
-	if err := json.NewEncoder(w).Encode(response); err != nil {
+
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", " ")
+
+	if err := encoder.Encode(response); err != nil {
 		logger.Errorw("couldn't write error response", "response", response, "error", err)
 		http.Error(w, "", http.StatusInternalServerError)
 	}
@@ -266,12 +266,6 @@ func (s *Server) respondOK(w http.ResponseWriter, response any) {
 		logger.Errorw("couldn't write OK response", "response", response, "error", err)
 		http.Error(w, "", http.StatusInternalServerError)
 	}
-}
-
-func (s *Server) handleRoot(w http.ResponseWriter, req *http.Request) {
-	s.respondOK(w, MessageResponse{
-		Message: "Relay Monitor API",
-	})
 }
 
 func (s *Server) handleCountValidators(w http.ResponseWriter, r *http.Request) {
@@ -370,7 +364,7 @@ func (s *Server) Run(ctx context.Context) error {
 	logger.Infof("API server listening on %s", host)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", get(s.handleRoot))
+	mux.HandleFunc("/", get(s.handleFaultsRequest))
 	mux.HandleFunc(GetFaultEndpoint, get(s.handleFaultsRequest))
 	mux.HandleFunc(RegisterValidatorEndpoint, post(s.handleRegisterValidator))
 

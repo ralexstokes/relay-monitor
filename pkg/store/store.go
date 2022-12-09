@@ -16,9 +16,9 @@ type Storer interface {
 	// `GetValidatorRegistrations` returns all known registrations for the validator's public key, sorted by timestamp (increasing).
 	GetValidatorRegistrations(context.Context, *types.PublicKey) ([]types.SignedValidatorRegistration, error)
 	// `GetCountValidatorsRegistrations`returns the total number of valid registrations processed.
-	GetCountValidatorsRegistrations(ctx context.Context) (int, error)
+	GetCountValidatorsRegistrations(ctx context.Context) (uint, error)
 	// `GetCountValidators`returns the number of validators that have successfully submitted at least one registration.
-	GetCountValidators(ctx context.Context) (int, error)
+	GetCountValidators(ctx context.Context) (uint, error)
 }
 
 type MemoryStore struct {
@@ -65,14 +65,14 @@ func (s *MemoryStore) GetValidatorRegistrations(ctx context.Context, publicKey *
 	return s.registrations[*publicKey], nil
 }
 
-func (s *MemoryStore) GetCountValidatorsRegistrations(ctx context.Context) (int, error) {
-	var totalRegistrations int
+func (s *MemoryStore) GetCountValidatorsRegistrations(ctx context.Context) (uint, error) {
+	var totalRegistrations uint
 	for _, signedRegistrations := range s.registrations {
-		totalRegistrations += len(signedRegistrations)
+		totalRegistrations += uint(len(signedRegistrations))
 	}
 	return totalRegistrations, nil
 }
 
-func (s *MemoryStore) GetCountValidators(ctx context.Context) (int, error) {
-	return len(s.registrations), nil
+func (s *MemoryStore) GetCountValidators(ctx context.Context) (uint, error) {
+	return uint(len(s.registrations)), nil
 }
