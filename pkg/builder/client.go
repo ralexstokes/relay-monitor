@@ -9,6 +9,8 @@ import (
 	"time"
 
 	boostTypes "github.com/flashbots/go-boost-utils/types"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/ralexstokes/relay-monitor/pkg/metrics"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 )
 
@@ -71,6 +73,10 @@ func (c *Client) GetStatus() error {
 
 // GetBid implements the `getHeader` endpoint in the Builder API
 func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.PublicKey) (*types.Bid, uint64, error) {
+
+	t := prometheus.NewTimer(metrics.GetBid)
+	defer t.ObserveDuration()
+
 	bidUrl := c.endpoint + fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot, parentHash, publicKey)
 	req, err := http.NewRequest(http.MethodGet, bidUrl, nil)
 	if err != nil {
