@@ -15,6 +15,10 @@ type Storer interface {
 	GetBid(context.Context, *types.BidContext) (*types.Bid, error)
 	// `GetValidatorRegistrations` returns all known registrations for the validator's public key, sorted by timestamp (increasing).
 	GetValidatorRegistrations(context.Context, *types.PublicKey) ([]types.SignedValidatorRegistration, error)
+	// `GetCountValidatorsRegistrations`returns the total number of valid registrations processed.
+	GetCountValidatorsRegistrations(ctx context.Context) (uint, error)
+	// `GetCountValidators`returns the number of validators that have successfully submitted at least one registration.
+	GetCountValidators(ctx context.Context) (uint, error)
 }
 
 type MemoryStore struct {
@@ -59,4 +63,16 @@ func (s *MemoryStore) PutAcceptance(ctx context.Context, bidCtx *types.BidContex
 
 func (s *MemoryStore) GetValidatorRegistrations(ctx context.Context, publicKey *types.PublicKey) ([]types.SignedValidatorRegistration, error) {
 	return s.registrations[*publicKey], nil
+}
+
+func (s *MemoryStore) GetCountValidatorsRegistrations(ctx context.Context) (uint, error) {
+	var totalRegistrations uint
+	for _, signedRegistrations := range s.registrations {
+		totalRegistrations += uint(len(signedRegistrations))
+	}
+	return totalRegistrations, nil
+}
+
+func (s *MemoryStore) GetCountValidators(ctx context.Context) (uint, error) {
+	return uint(len(s.registrations)), nil
 }

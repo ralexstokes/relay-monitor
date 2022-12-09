@@ -24,6 +24,10 @@ const (
 	RegisterValidatorEndpoint       = "/eth/v1/builder/validators"
 	PostAuctionTranscriptEndpoint   = "/monitor/v1/transcript"
 	DefaultEpochSpanForFaultsWindow = 256
+
+	// Validator metrics endpoints.
+	GetValidatorsEndpoint              = "/monitor/v1/validators"
+	GetValidatorsRegistrationsEndpoint = "/monitor/v1/validators/registrations"
 )
 
 type Config struct {
@@ -39,6 +43,10 @@ type Span struct {
 type FaultsResponse struct {
 	Span                 Span `json:"span"`
 	analysis.FaultRecord `json:"data"`
+}
+
+type CountResponse struct {
+	Count uint `json:"count"`
 }
 
 type Server struct {
@@ -119,7 +127,7 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 		startEpochValue, err := strconv.ParseUint(startEpochStr, 10, 64)
 		if err != nil {
 			logger.Errorw("error parsing query param for faults request", "err", err, "startEpoch", startEpochStr)
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			s.respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		epoch := types.Epoch(startEpochValue)
@@ -132,7 +140,7 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 		endEpochValue, err := strconv.ParseUint(endEpochStr, 10, 64)
 		if err != nil {
 			logger.Errorw("error parsing query param for faults request", "err", err, "endEpoch", endEpochStr)
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			s.respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		epoch := types.Epoch(endEpochValue)
@@ -145,7 +153,7 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 		epochSpanValue, err := strconv.ParseUint(epochSpanForFaultsWindow, 10, 64)
 		if err != nil {
 			logger.Errorw("error parsing query param for faults request", "err", err, "epochSpan", epochSpanForFaultsWindow)
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			s.respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		epochSpanRequest = types.Epoch(epochSpanValue)
@@ -155,9 +163,6 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 	startEpoch, endEpoch := computeSpanFromRequest(startEpochRequest, endEpochRequest, epochSpanRequest, currentEpoch)
 	faults := s.analyzer.GetFaults(startEpoch, endEpoch)
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
 	response := FaultsResponse{
 		Span: Span{
 			Start: startEpoch,
@@ -165,13 +170,7 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 		},
 		FaultRecord: faults,
 	}
-	encoder := json.NewEncoder(w)
-	encoder.SetIndent("", "  ")
-	err := encoder.Encode(response)
-	if err != nil {
-		logger.Errorw("could not encode relay faults", "error", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+	s.respondOK(w, response)
 }
 
 func (s *Server) validateRegistrationTimestamp(registration, currentRegistration *types.SignedValidatorRegistration) error {
@@ -242,6 +241,65 @@ type apiError struct {
 	Message string `json:"message"`
 }
 
+func (s *Server) respondError(w http.ResponseWriter, code int, message string) {
+	logger := s.logger.Sugar()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	response := apiError{code, message}
+
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", " ")
+
+	if err := encoder.Encode(response); err != nil {
+		logger.Errorw("couldn't write error response", "response", response, "error", err)
+		http.Error(w, "", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) respondOK(w http.ResponseWriter, response any) {
+	logger := s.logger.Sugar()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		logger.Errorw("couldn't write OK response", "response", response, "error", err)
+		http.Error(w, "", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) handleCountValidators(w http.ResponseWriter, r *http.Request) {
+	logger := s.logger.Sugar()
+
+	validators, err := s.store.GetCountValidators(context.Background())
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response := CountResponse{
+		Count: validators,
+	}
+	logger.Debugw("processed request for validators", "count", response.Count)
+
+	s.respondOK(w, response)
+}
+
+func (s *Server) handleCountValidatorsRegistrations(w http.ResponseWriter, r *http.Request) {
+	logger := s.logger.Sugar()
+
+	registrations, err := s.store.GetCountValidatorsRegistrations(context.Background())
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response := CountResponse{
+		Count: registrations,
+	}
+	logger.Debugw("processed request for validators registrations", "count", response.Count)
+
+	s.respondOK(w, response)
+}
+
 func (s *Server) handleRegisterValidator(w http.ResponseWriter, r *http.Request) {
 	logger := s.logger.Sugar()
 	ctx := context.Background()
@@ -250,7 +308,7 @@ func (s *Server) handleRegisterValidator(w http.ResponseWriter, r *http.Request)
 	err := json.NewDecoder(r.Body).Decode(&registrations)
 	if err != nil {
 		logger.Warn("could not decode signed validator registration")
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		s.respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -258,25 +316,13 @@ func (s *Server) handleRegisterValidator(w http.ResponseWriter, r *http.Request)
 		currentRegistration, err := store.GetLatestValidatorRegistration(ctx, s.store, &registration.Message.Pubkey)
 		if err != nil {
 			logger.Warnw("could not get registrations for validator", "error", err, "registration", registration)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			s.respondError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		err = s.validateRegistration(&registration, currentRegistration)
 		if err != nil {
 			logger.Warnw("invalid validator registration in batch", "registration", registration, "error", err)
-			w.WriteHeader(http.StatusBadRequest)
-			w.Header().Set("Content-Type", "application/json")
-			response := apiError{
-				Code:    http.StatusBadRequest,
-				Message: err.Error(),
-			}
-			encoder := json.NewEncoder(w)
-			err := encoder.Encode(response)
-			if err != nil {
-				logger.Warnw("could not send API error", "error", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
+			s.respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 	}
@@ -297,7 +343,7 @@ func (s *Server) handleAuctionTranscript(w http.ResponseWriter, r *http.Request)
 	err := json.NewDecoder(r.Body).Decode(&transcript)
 	if err != nil {
 		logger.Warn("could not decode auction transcript")
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		s.respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -321,6 +367,10 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc("/", get(s.handleFaultsRequest))
 	mux.HandleFunc(GetFaultEndpoint, get(s.handleFaultsRequest))
 	mux.HandleFunc(RegisterValidatorEndpoint, post(s.handleRegisterValidator))
+
+	mux.HandleFunc(GetValidatorsEndpoint, get(s.handleCountValidators))
+	mux.HandleFunc(GetValidatorsRegistrationsEndpoint, get(s.handleCountValidatorsRegistrations))
+
 	mux.HandleFunc(PostAuctionTranscriptEndpoint, post(s.handleAuctionTranscript))
 	return http.ListenAndServe(host, mux)
 }

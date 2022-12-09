@@ -166,3 +166,27 @@ NOTE: if neither parameter is provided, the response will be `256` epochs behind
   }
 }
 ```
+
+### GET `/monitor/v1/validators`
+
+Exposes a stats counter for unique validators that the relay monitor has processed registrations for. A unique registration is identified and stored by the relay monitor via the provided validator `"pubkey"`. Registrations are submitted via [the exposed `registerValidator`](#post-ethv1buildervalidators) endpoint.
+
+#### Example response:
+
+```json
+{
+    "count": 1
+}
+```
+
+### GET `/monitor/v1/validators/registrations`
+
+Exposes a stats counter for the total number of validator registrations that the relay monitor has processed. A validator can, and is expected to, update block building preferences via [the exposed `registerValidator`](#post-ethv1buildervalidators) endpoint.
+
+#### Example response:
+
+```json
+{
+    "count": 10
+}
+```
