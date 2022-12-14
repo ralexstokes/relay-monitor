@@ -210,30 +210,21 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 		}
 	}
 
-	// // expectedRandomness, err := a.consensusClient.GetRandomnessForProposal(bidCtx.Slot)
-	// // if err != nil {
-	// // 	return nil, err
-	// // }
-	// // if expectedRandomness != header.Random {
-	// // 	return &InvalidBid{
-	// // 		Reason: "invalid random value",
-	// // 	}, nil
-	// // }
+	// expectedRandomness, err := a.consensusClient.GetRandomnessForProposal(bidCtx.Slot)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// if expectedRandomness != header.Random {
+	// 	return &InvalidBid{
+	// 		Reason: "invalid random value",
+	// 	}, nil
+	// }
 
 	expectedBlockNumber, err := a.consensusClient.GetBlockNumberForProposal(bidCtx.Slot)
 	if err != nil {
 		return nil, err
 	}
 	if expectedBlockNumber != header.BlockNumber {
-		// invalidBidErr = &InvalidBid{
-		// 	Reason: "invalid block number",
-		// 	Context: map[string]interface{}{
-		// 		ExpectedKey:   expectedBlockNumber,
-		// 		ActualKey:     header.BlockHash,
-		// 		RelayerPubKey: bidCtx.RelayPublicKey,
-		// 	},
-		// }
-
 		invalidBidErr.Reason = "invalid block number"
 		invalidBidErr.Context[ExpectedKey] = expectedBlockNumber
 		invalidBidErr.Context[ActualKey] = header.BlockHash
@@ -241,15 +232,6 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 	}
 
 	if header.GasUsed > header.GasLimit {
-		// invalidBidErr = &InvalidBid{
-		// 	Reason: "gas used is higher than gas limit",
-		// 	Context: map[string]interface{}{
-		// 		ExpectedKey:   header.GasLimit,
-		// 		ActualKey:     header.GasUsed,
-		// 		RelayerPubKey: bidCtx.RelayPublicKey,
-		// 	},
-		// }
-
 		invalidBidErr.Reason = "gas used is higher than gas limit"
 		invalidBidErr.Context[ExpectedKey] = header.GasLimit
 		invalidBidErr.Context[ActualKey] = header.GasUsed
@@ -258,19 +240,9 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 
 	expectedTimestamp := a.clock.SlotInSeconds(bidCtx.Slot)
 	if expectedTimestamp != int64(header.Timestamp) {
-		// invalidBidErr = &InvalidBid{
-		// 	Reason: "invalid timestamp",
-		// 	Context: map[string]interface{}{
-		// 		ExpectedKey:   expectedTimestamp,
-		// 		ActualKey:     header.Timestamp,
-		// 		RelayerPubKey: bidCtx.RelayPublicKey,
-		// 	},
-		// }
-
 		invalidBidErr.Reason = "invalid timestamp"
 		invalidBidErr.Context[ExpectedKey] = expectedTimestamp
 		invalidBidErr.Context[ActualKey] = header.Timestamp
-
 		return invalidBidErr, nil
 	}
 
@@ -281,19 +253,9 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 	baseFee := uint256.NewInt(0)
 	baseFee.SetBytes(reverse(header.BaseFeePerGas[:]))
 	if !expectedBaseFee.Eq(baseFee) {
-		// invalidBidErr = &InvalidBid{
-		// 	Reason: "invalid base fee",
-		// 	Context: map[string]interface{}{
-		// 		ExpectedKey:   expectedBaseFee,
-		// 		ActualKey:     baseFee,
-		// 		RelayerPubKey: bidCtx.RelayPublicKey,
-		// 	},
-		// }
-
 		invalidBidErr.Reason = "invalid base fee"
 		invalidBidErr.Context[ExpectedKey] = expectedBaseFee
 		invalidBidErr.Context[ActualKey] = baseFee
-
 		return invalidBidErr, err
 	}
 
