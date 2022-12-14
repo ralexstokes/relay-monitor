@@ -38,11 +38,12 @@ type ValidationOutput struct {
 	RelayPublicKey string         `json:",omitempty"`
 	Slot           types.Slot     `json:",omitempty"`
 	Region         string         `json:",omitempty"`
-	Error          *ValidationErr `json:",omitempty"`
+	Error          *ValidationErr `json:"error,omitempty"`
 }
 
 type ValidationErr struct {
-	Reason   string      `json:",omitempty"`
-	Expected interface{} `json:",omitempty"`
-	Actual   interface{} `json:",omitempty"`
+	Type     types.ErrorType `json:"errorType,omitempty"`
+	Reason   string          `json:",omitempty"`
+	Expected interface{}     `json:",omitempty"`
+	Actual   interface{}     `json:",omitempty"`
 }
