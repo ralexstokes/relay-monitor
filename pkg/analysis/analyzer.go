@@ -2,13 +2,16 @@ package analysis
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
+	"time"
 
 	"github.com/holiman/uint256"
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
 	"github.com/ralexstokes/relay-monitor/pkg/crypto"
 	"github.com/ralexstokes/relay-monitor/pkg/data"
+	"github.com/ralexstokes/relay-monitor/pkg/output"
 	"github.com/ralexstokes/relay-monitor/pkg/store"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 	"go.uber.org/zap"
@@ -16,6 +19,10 @@ import (
 
 const (
 	GasLimitBoundDivisor = 1024
+	ExpectedKey          = "expected"
+	ActualKey            = "actual"
+	RelayerPubKey        = "pubKey"
+	SlotKey              = "slot"
 )
 
 type Analyzer struct {
@@ -29,9 +36,12 @@ type Analyzer struct {
 
 	faults     FaultRecord
 	faultsLock sync.Mutex
+
+	output *output.FileOutput
+	region string
 }
 
-func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan data.Event, store store.Storer, consensusClient *consensus.Client, clock *consensus.Clock) *Analyzer {
+func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan data.Event, store store.Storer, consensusClient *consensus.Client, clock *consensus.Clock, output *output.FileOutput, region string) *Analyzer {
 	faults := make(FaultRecord)
 	for _, relay := range relays {
 		faults[relay.PublicKey] = &Faults{}
@@ -43,6 +53,8 @@ func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan dat
 		consensusClient: consensusClient,
 		clock:           clock,
 		faults:          faults,
+		output:          output,
+		region:          region,
 	}
 }
 
@@ -90,34 +102,89 @@ func reverse(src []byte) []byte {
 	return dst
 }
 
+func (a *Analyzer) outputValidationError(validationError *InvalidBid) {
+	if validationError == nil || validationError.Reason == "" {
+		return
+	}
+
+	go func() {
+		logger := a.logger.Sugar()
+
+		// Expected and actual are not defined for all errors, extract them if present
+		var expected interface{}
+		var actual interface{}
+
+		if v, okay := validationError.Context[ExpectedKey]; okay {
+			expected = v
+		}
+
+		if v, okay := validationError.Context[ActualKey]; okay {
+			actual = v
+		}
+
+		out := &data.ValidationOutput{
+			Timestamp:      time.Now(),
+			Region:         a.region,
+			RelayPublicKey: validationError.Context[RelayerPubKey].(types.PublicKey).String(),
+			Slot:           validationError.Context[SlotKey].(types.Slot),
+			Error: &data.ValidationErr{
+				Reason:   validationError.Reason,
+				Expected: expected,
+				Actual:   actual,
+			},
+		}
+
+		outBytes, err := json.Marshal(out)
+		if err != nil {
+			logger.Warnw("unable to marshal output", "error", err, "content", out)
+		} else {
+			outBytes = append(outBytes, []byte("\n")...)
+			err = a.output.WriteEntry(outBytes)
+			if err != nil {
+				logger.Warnw("unable to write output", "error", err)
+			}
+		}
+	}()
+}
+
 func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bid *types.Bid) (*InvalidBid, error) {
 	if bid == nil {
 		return nil, nil
 	}
 
+	invalidBidErr := &InvalidBid{
+		Context: map[string]interface{}{
+			RelayerPubKey: bidCtx.RelayPublicKey,
+			SlotKey:       bidCtx.Slot,
+		},
+	}
+
+	defer a.outputValidationError(invalidBidErr)
 	if bidCtx.RelayPublicKey != bid.Message.Pubkey {
-		return &InvalidBid{
-			Reason: "incorrect public key from relay",
-		}, nil
+		invalidBidErr.Reason = "incorrect public key from relay"
+		invalidBidErr.Context[ExpectedKey] = bidCtx.RelayPublicKey
+		invalidBidErr.Context[ActualKey] = bid.Message.Pubkey
+		return invalidBidErr, nil
 	}
 
 	validSignature, err := crypto.VerifySignature(bid.Message, a.consensusClient.SignatureDomainForBuilder(), bid.Message.Pubkey[:], bid.Signature[:])
 	if err != nil {
 		return nil, err
 	}
-
 	if !validSignature {
-		return &InvalidBid{
-			Reason: "invalid signature",
-		}, nil
+		invalidBidErr.Reason = "relay public key does not match signature"
+		// No actual and expected when signatures don't match
+		return invalidBidErr, nil
 	}
 
 	header := bid.Message.Header
 
 	if bidCtx.ParentHash != header.ParentHash {
-		return &InvalidBid{
-			Reason: "invalid parent hash",
-		}, nil
+		invalidBidErr.Reason = "invalid parent hash"
+		invalidBidErr.Context[ExpectedKey] = bidCtx.ParentHash
+		invalidBidErr.Context[ActualKey] = header.ParentHash
+
+		return invalidBidErr, nil
 	}
 
 	registration, err := store.GetLatestValidatorRegistration(ctx, a.store, &bidCtx.ProposerPublicKey)
@@ -135,44 +202,76 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 			return nil, err
 		}
 		if !valid {
-			return &InvalidBid{
-				Reason: "invalid gas limit",
-				Type:   InvalidBidIgnoredPreferencesType,
-			}, nil
+			invalidBidErr.Reason = "invalid gas limit"
+			invalidBidErr.Context[ExpectedKey] = gasLimitPreference
+			invalidBidErr.Context[ActualKey] = header.GasLimit
+
+			return invalidBidErr, nil
 		}
 	}
 
-	// expectedRandomness, err := a.consensusClient.GetRandomnessForProposal(bidCtx.Slot)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// if expectedRandomness != header.Random {
-	// 	return &InvalidBid{
-	// 		Reason: "invalid random value",
-	// 	}, nil
-	// }
+	// // expectedRandomness, err := a.consensusClient.GetRandomnessForProposal(bidCtx.Slot)
+	// // if err != nil {
+	// // 	return nil, err
+	// // }
+	// // if expectedRandomness != header.Random {
+	// // 	return &InvalidBid{
+	// // 		Reason: "invalid random value",
+	// // 	}, nil
+	// // }
 
 	expectedBlockNumber, err := a.consensusClient.GetBlockNumberForProposal(bidCtx.Slot)
 	if err != nil {
 		return nil, err
 	}
 	if expectedBlockNumber != header.BlockNumber {
-		return &InvalidBid{
-			Reason: "invalid block number",
-		}, nil
+		// invalidBidErr = &InvalidBid{
+		// 	Reason: "invalid block number",
+		// 	Context: map[string]interface{}{
+		// 		ExpectedKey:   expectedBlockNumber,
+		// 		ActualKey:     header.BlockHash,
+		// 		RelayerPubKey: bidCtx.RelayPublicKey,
+		// 	},
+		// }
+
+		invalidBidErr.Reason = "invalid block number"
+		invalidBidErr.Context[ExpectedKey] = expectedBlockNumber
+		invalidBidErr.Context[ActualKey] = header.BlockHash
+		return invalidBidErr, nil
 	}
 
 	if header.GasUsed > header.GasLimit {
-		return &InvalidBid{
-			Reason: "gas used is higher than gas limit",
-		}, nil
+		// invalidBidErr = &InvalidBid{
+		// 	Reason: "gas used is higher than gas limit",
+		// 	Context: map[string]interface{}{
+		// 		ExpectedKey:   header.GasLimit,
+		// 		ActualKey:     header.GasUsed,
+		// 		RelayerPubKey: bidCtx.RelayPublicKey,
+		// 	},
+		// }
+
+		invalidBidErr.Reason = "gas used is higher than gas limit"
+		invalidBidErr.Context[ExpectedKey] = header.GasLimit
+		invalidBidErr.Context[ActualKey] = header.GasUsed
+		return invalidBidErr, nil
 	}
 
 	expectedTimestamp := a.clock.SlotInSeconds(bidCtx.Slot)
 	if expectedTimestamp != int64(header.Timestamp) {
-		return &InvalidBid{
-			Reason: "invalid timestamp",
-		}, nil
+		// invalidBidErr = &InvalidBid{
+		// 	Reason: "invalid timestamp",
+		// 	Context: map[string]interface{}{
+		// 		ExpectedKey:   expectedTimestamp,
+		// 		ActualKey:     header.Timestamp,
+		// 		RelayerPubKey: bidCtx.RelayPublicKey,
+		// 	},
+		// }
+
+		invalidBidErr.Reason = "invalid timestamp"
+		invalidBidErr.Context[ExpectedKey] = expectedTimestamp
+		invalidBidErr.Context[ActualKey] = header.Timestamp
+
+		return invalidBidErr, nil
 	}
 
 	expectedBaseFee, err := a.consensusClient.GetBaseFeeForProposal(bidCtx.Slot)
@@ -182,9 +281,20 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 	baseFee := uint256.NewInt(0)
 	baseFee.SetBytes(reverse(header.BaseFeePerGas[:]))
 	if !expectedBaseFee.Eq(baseFee) {
-		return &InvalidBid{
-			Reason: "invalid base fee",
-		}, nil
+		// invalidBidErr = &InvalidBid{
+		// 	Reason: "invalid base fee",
+		// 	Context: map[string]interface{}{
+		// 		ExpectedKey:   expectedBaseFee,
+		// 		ActualKey:     baseFee,
+		// 		RelayerPubKey: bidCtx.RelayPublicKey,
+		// 	},
+		// }
+
+		invalidBidErr.Reason = "invalid base fee"
+		invalidBidErr.Context[ExpectedKey] = expectedBaseFee
+		invalidBidErr.Context[ActualKey] = baseFee
+
+		return invalidBidErr, err
 	}
 
 	return nil, nil
