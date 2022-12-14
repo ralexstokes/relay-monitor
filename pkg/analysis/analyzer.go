@@ -23,6 +23,7 @@ const (
 	ActualKey            = "actual"
 	RelayerPubKey        = "pubKey"
 	SlotKey              = "slot"
+	ErrTypeKey           = "errType"
 )
 
 type Analyzer struct {
@@ -128,6 +129,7 @@ func (a *Analyzer) outputValidationError(validationError *InvalidBid) {
 			RelayPublicKey: validationError.Context[RelayerPubKey].(types.PublicKey).String(),
 			Slot:           validationError.Context[SlotKey].(types.Slot),
 			Error: &data.ValidationErr{
+				Type:     validationError.Context[ErrTypeKey].(types.ErrorType),
 				Reason:   validationError.Reason,
 				Expected: expected,
 				Actual:   actual,
@@ -154,6 +156,7 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 
 	invalidBidErr := &InvalidBid{
 		Context: map[string]interface{}{
+			ErrTypeKey:    types.ValidationErr,
 			RelayerPubKey: bidCtx.RelayPublicKey,
 			SlotKey:       bidCtx.Slot,
 		},
@@ -183,7 +186,6 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 		invalidBidErr.Reason = "invalid parent hash"
 		invalidBidErr.Context[ExpectedKey] = bidCtx.ParentHash
 		invalidBidErr.Context[ActualKey] = header.ParentHash
-
 		return invalidBidErr, nil
 	}
 
@@ -205,7 +207,6 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 			invalidBidErr.Reason = "invalid gas limit"
 			invalidBidErr.Context[ExpectedKey] = gasLimitPreference
 			invalidBidErr.Context[ActualKey] = header.GasLimit
-
 			return invalidBidErr, nil
 		}
 	}
