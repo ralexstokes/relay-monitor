@@ -46,6 +46,7 @@ const (
 	PubKeyErr     ErrorType = "PublicKeyError"
 	EmptyBidError ErrorType = "EmptyBidError"
 	RelayError    ErrorType = "RelayError"
+	ValidationErr ErrorType = "ValidationError"
 )
 
 type ClientError struct {

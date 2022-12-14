@@ -39,7 +39,7 @@ func (c *Collector) outputBid(event *BidEvent, duration *uint64, relay *builder.
 	go func() {
 		logger := c.logger.Sugar()
 
-		out := &Output{
+		out := &BidOutput{
 			Timestamp: time.Now(),
 			Rtt:       *duration,
 			Bid:       *event,

@@ -85,16 +85,22 @@ func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.
 	start := time.Now()
 	resp, err := c.client.Do(req)
 	duration := time.Since(start).Milliseconds()
-	// err = fmt.Errorf("intentional error")
 	if err != nil {
 		return nil, 0, &types.ClientError{Type: types.RelayError, Code: 500, Message: err.Error()}
 	}
 	if resp.StatusCode == http.StatusNoContent {
-		return nil, 0, nil
+		return nil, uint64(duration), nil
 	}
 	if resp.StatusCode != http.StatusOK {
 		rspBytes, _ := ioutil.ReadAll(resp.Body)
-		return nil, 0, &types.ClientError{Type: types.RelayError, Code: resp.StatusCode, Message: string(rspBytes)}
+
+		errorMsg := &types.ClientError{}
+		err = json.Unmarshal(rspBytes, errorMsg)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		return nil, uint64(duration), &types.ClientError{Type: types.RelayError, Code: resp.StatusCode, Message: errorMsg.Message}
 	}
 
 	var bid boostTypes.GetHeaderResponse
