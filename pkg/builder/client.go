@@ -76,7 +76,6 @@ func (c *Client) GetStatus() error {
 
 // GetBid implements the `getHeader` endpoint in the Builder API
 func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.PublicKey) (*types.Bid, uint64, error) {
-	// logger := zap.S()
 	t := prometheus.NewTimer(metrics.GetBid)
 	defer t.ObserveDuration()
 
