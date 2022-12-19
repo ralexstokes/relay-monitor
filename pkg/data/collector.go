@@ -61,7 +61,6 @@ func (c *Collector) outputBid(event *BidEvent, duration *uint64, relay *builder.
 }
 
 func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Client, slot types.Slot) (*BidEvent, error) {
-	logger := c.logger.Sugar()
 	var duration *uint64 = new(uint64)
 	var bid *types.Bid
 
@@ -95,7 +94,6 @@ func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Clie
 		return nil, err
 	}
 	if bid == nil {
-		logger.Info("No bid returned")
 		bidCtx.Error = &types.ClientError{Type: types.EmptyBidError, Code: 204, Message: "No bid returned"}
 		return nil, nil
 	}

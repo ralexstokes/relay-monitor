@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
+	"go.uber.org/zap/zaptest"
 )
 
 const (
@@ -11,7 +12,8 @@ const (
 )
 
 func TestClientStatus(t *testing.T) {
-	c, err := builder.NewClient(exampleRelayURL)
+	logger := zaptest.NewLogger(t).Sugar()
+	c, err := builder.NewClient(exampleRelayURL, logger)
 	if err != nil {
 		t.Error(err)
 		return

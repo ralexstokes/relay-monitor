@@ -12,11 +12,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/ralexstokes/relay-monitor/pkg/metrics"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
+	"go.uber.org/zap"
 )
 
 const clientTimeoutSec = 2
 
 type Client struct {
+	logger    *zap.SugaredLogger
 	endpoint  string
 	PublicKey types.PublicKey
 	client    http.Client
@@ -30,7 +32,7 @@ func (c *Client) Endpoint() string {
 	return c.endpoint
 }
 
-func NewClient(endpoint string) (*Client, error) {
+func NewClient(endpoint string, logger *zap.SugaredLogger) (*Client, error) {
 	u, err := url.Parse(endpoint)
 	if err != nil {
 		return nil, err
@@ -50,6 +52,7 @@ func NewClient(endpoint string) (*Client, error) {
 		endpoint:  endpoint,
 		PublicKey: publicKey,
 		client:    client,
+		logger:    logger,
 	}, nil
 }
 
@@ -73,7 +76,7 @@ func (c *Client) GetStatus() error {
 
 // GetBid implements the `getHeader` endpoint in the Builder API
 func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.PublicKey) (*types.Bid, uint64, error) {
-
+	// logger := zap.S()
 	t := prometheus.NewTimer(metrics.GetBid)
 	defer t.ObserveDuration()
 
@@ -92,12 +95,17 @@ func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.
 		return nil, uint64(duration), nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		rspBytes, _ := ioutil.ReadAll(resp.Body)
+		rspBytes, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			c.logger.Debugw("failed to read response body", zap.Error(err))
+			return nil, uint64(duration), err
+		}
 
 		errorMsg := &types.ClientError{}
 		err = json.Unmarshal(rspBytes, errorMsg)
 		if err != nil {
-			return nil, 0, err
+			c.logger.Debug("failed to unmarshal response body", "body", string(rspBytes), zap.Error(err))
+			return nil, uint64(duration), &types.ClientError{Type: types.RelayError, Code: resp.StatusCode, Message: "Unable to parse relay response"}
 		}
 
 		return nil, uint64(duration), &types.ClientError{Type: types.RelayError, Code: resp.StatusCode, Message: errorMsg.Message}
