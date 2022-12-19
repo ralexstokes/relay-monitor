@@ -29,7 +29,7 @@ type Monitor struct {
 func parseRelaysFromEndpoint(logger *zap.SugaredLogger, relayEndpoints []string) []*builder.Client {
 	var relays []*builder.Client
 	for _, endpoint := range relayEndpoints {
-		relay, err := builder.NewClient(endpoint)
+		relay, err := builder.NewClient(endpoint, logger)
 		if err != nil {
 			logger.Warnf("could not instantiate relay at %s: %v", endpoint, err)
 			continue
