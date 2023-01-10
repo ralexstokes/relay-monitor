@@ -124,7 +124,7 @@ func (a *Analyzer) outputValidationError(validationError *InvalidBid) {
 		}
 
 		out := &data.ValidationOutput{
-			Timestamp:      time.Now(),
+			Timestamp:      time.Unix(a.clock.SlotInSeconds(validationError.Context[SlotKey].(types.Slot)), 0),
 			Region:         a.region,
 			RelayPublicKey: validationError.Context[RelayerPubKey].(types.PublicKey).String(),
 			Slot:           validationError.Context[SlotKey].(types.Slot),

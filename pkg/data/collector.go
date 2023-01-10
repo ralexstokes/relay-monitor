@@ -40,7 +40,7 @@ func (c *Collector) outputBid(event *BidEvent, duration *uint64, relay *builder.
 		logger := c.logger.Sugar()
 
 		out := &BidOutput{
-			Timestamp: time.Now(),
+			Timestamp: time.Unix(c.clock.SlotInSeconds(event.Context.Slot), 0),
 			Rtt:       *duration,
 			Bid:       *event,
 			Relay:     relay.Endpoint(),
