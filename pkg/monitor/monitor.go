@@ -69,7 +69,12 @@ func New(ctx context.Context, config *Config, zapLogger *zap.Logger) (*Monitor, 
 
 	events := make(chan data.Event, eventBufferSize)
 	collector := data.NewCollector(zapLogger, relays, clock, consensusClient, events)
-	store := store.NewMemoryStore()
+
+	store, err := store.NewPostgresStore(config.Store.Dsn, zapLogger)
+	if err != nil {
+		logger.Fatal("could not instantiate postgres store", zap.Error(err))
+	}
+
 	analyzer := analysis.NewAnalyzer(zapLogger, relays, events, store, consensusClient, clock)
 
 	apiServer := api.New(config.Api, zapLogger, analyzer, events, clock, store, consensusClient)

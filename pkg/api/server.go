@@ -255,7 +255,7 @@ func (s *Server) handleRegisterValidator(w http.ResponseWriter, r *http.Request)
 	}
 
 	for _, registration := range registrations {
-		currentRegistration, err := store.GetLatestValidatorRegistration(ctx, s.store, &registration.Message.Pubkey)
+		currentRegistration, err := s.store.GetLatestValidatorRegistration(ctx, &registration.Message.Pubkey)
 		if err != nil {
 			logger.Warnw("could not get registrations for validator", "error", err, "registration", registration)
 			http.Error(w, err.Error(), http.StatusInternalServerError)

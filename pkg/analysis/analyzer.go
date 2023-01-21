@@ -125,7 +125,7 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 		}, nil
 	}
 
-	registration, err := store.GetLatestValidatorRegistration(ctx, a.store, &bidCtx.ProposerPublicKey)
+	registration, err := a.store.GetLatestValidatorRegistration(ctx, &bidCtx.ProposerPublicKey)
 	if err != nil {
 		return nil, err
 	}
