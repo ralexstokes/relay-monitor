@@ -114,20 +114,24 @@ func (c *Collector) collectFromRelay(ctx context.Context, relay *builder.Client)
 		case <-ctx.Done():
 			return
 		case slot := <-slots:
-			payload, err := c.collectBidFromRelay(ctx, relay, slot)
-			if err != nil {
-				logger.Warnw("could not get bid from relay", "error", err, "relayPublicKey", relayID, "slot", slot)
-				// TODO implement some retry logic...
-				continue
+			// Querying for 3 bids per slot
+			for i := 0; i < 3; i++{
+				payload, err := c.collectBidFromRelay(ctx, relay, slot)
+				if err != nil {
+					logger.Warnw("could not get bid from relay", "error", err, "relayPublicKey", relayID, "slot", slot, "attempt", i)
+					// TODO implement some retry logic...
+					continue
+				}
+				if payload == nil {
+					// No bid for this slot, continue
+					// TODO consider trying again...
+					continue
+				}
+				logger.Debugw("got bid", "relay", relayID, "context", payload.Context, "bid", payload.Bid, "attempt", i)
+				// TODO what if this is slow
+				c.events <- Event{Payload: payload}
+				time.Sleep(100 * time.Millisecond)
 			}
-			if payload == nil {
-				// No bid for this slot, continue
-				// TODO consider trying again...
-				continue
-			}
-			logger.Debugw("got bid", "relay", relayID, "context", payload.Context, "bid", payload.Bid)
-			// TODO what if this is slow
-			c.events <- Event{Payload: payload}
 		}
 	}
 }
