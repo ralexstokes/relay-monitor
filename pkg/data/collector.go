@@ -105,17 +105,20 @@ func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Clie
 
 func (c *Collector) collectFromRelay(ctx context.Context, relay *builder.Client) {
 	logger := c.logger.Sugar()
-
+	
 	relayID := relay.PublicKey
 
 	slots := c.clock.TickSlots(ctx)
+	nextSlot := slots + uint64(1)
+	// TODO: Make queriesPerSlot an argument
+	queriesPerSlot := 5
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case slot := <-slots:
-			// Querying for 3 bids per slot
-			for i := 0; i < 3; i++{
+			// Querying for 5 bids per slot
+			for i := 0; i < queriesPerSlot; i++{
 				payload, err := c.collectBidFromRelay(ctx, relay, slot)
 				if err != nil {
 					logger.Warnw("could not get bid from relay", "error", err, "relayPublicKey", relayID, "slot", slot, "attempt", i)
@@ -130,7 +133,13 @@ func (c *Collector) collectFromRelay(ctx context.Context, relay *builder.Client)
 				logger.Debugw("got bid", "relay", relayID, "context", payload.Context, "bid", payload.Bid, "attempt", i)
 				// TODO what if this is slow
 				c.events <- Event{Payload: payload}
-				time.Sleep(100 * time.Millisecond)
+				// Only sleeping if there is more than 1 second to next slot
+				timeToSlot := c.clock.SlotInSeconds(nextSlot)
+				if timeToSlot > 1 {
+					// Sleeping based on how much time and how many queries are left
+					sleepTime :=  ((timeToSlot - 1) / int64(queriesPerSlot - i)) * 1000
+					time.Sleep(time.Duration(sleepTime) * time.Millisecond)
+				}
 			}
 		}
 	}
