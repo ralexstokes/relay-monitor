@@ -2,7 +2,6 @@ package consensus
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/ralexstokes/relay-monitor/pkg/types"
@@ -94,7 +93,6 @@ func (c *Clock) multiTickSlots(ctx context.Context, tickPerSlot int, ch chan typ
 			for i := 0; i < tickPerSlot-1; i++ {
 				select {
 				case <-time.After(time.Duration(duration) * time.Second):
-					fmt.Printf("===== current_slot_start: %d, current_time: %d next_slot_start: %d slot: %d, expected_slot: %d \n", c.SlotInSeconds(currentSlot), time.Now().Unix(), c.SlotInSeconds(currentSlot+1), currentSlot, c.CurrentSlot(time.Now().Unix()))
 					ch <- currentSlot
 				case <-ctx.Done():
 					close(ch)
