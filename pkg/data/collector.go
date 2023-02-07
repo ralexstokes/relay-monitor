@@ -105,42 +105,29 @@ func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Clie
 
 func (c *Collector) collectFromRelay(ctx context.Context, relay *builder.Client) {
 	logger := c.logger.Sugar()
-	
+
 	relayID := relay.PublicKey
 
-	slots := c.clock.TickSlots(ctx)
-	// TODO: Make queriesPerSlot an argument
-	queriesPerSlot := 5
+	slots := c.clock.MultiTickSlots(ctx, 4)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case slot := <-slots:
-			nextSlot := slot + 1
-			// Querying for 5 bids per slot
-			for i := 0; i < queriesPerSlot; i++{
-				payload, err := c.collectBidFromRelay(ctx, relay, slot)
-				if err != nil {
-					logger.Warnw("could not get bid from relay", "error", err, "relayPublicKey", relayID, "slot", slot, "attempt", i)
-					// TODO implement some retry logic...
-					continue
-				}
-				if payload == nil {
-					// No bid for this slot, continue
-					// TODO consider trying again...
-					continue
-				}
-				logger.Debugw("got bid", "relay", relayID, "context", payload.Context, "bid", payload.Bid, "attempt", i)
-				// TODO what if this is slow
-				c.events <- Event{Payload: payload}
-				// Only sleeping if there is more than 1 second to next slot
-				timeToSlot := c.clock.SlotInSeconds(nextSlot)
-				if timeToSlot > 1 {
-					// Sleeping based on how much time and how many queries are left
-					sleepTime :=  ((timeToSlot - 1) / int64(queriesPerSlot - i)) * 1000
-					time.Sleep(time.Duration(sleepTime) * time.Millisecond)
-				}
+			payload, err := c.collectBidFromRelay(ctx, relay, slot)
+			if err != nil {
+				logger.Warnw("could not get bid from relay", "error", err, "relayPublicKey", relayID, "slot", slot)
+				// TODO implement some retry logic...
+				continue
 			}
+			if payload == nil {
+				// No bid for this slot, continue
+				// TODO consider trying again...
+				continue
+			}
+			logger.Debugw("got bid", "relay", relayID, "context", payload.Context, "bid", payload.Bid)
+			// TODO what if this is slow
+			c.events <- Event{Payload: payload}
 		}
 	}
 }
