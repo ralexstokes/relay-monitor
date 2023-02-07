@@ -109,7 +109,6 @@ func (c *Collector) collectFromRelay(ctx context.Context, relay *builder.Client)
 	relayID := relay.PublicKey
 
 	slots := c.clock.TickSlots(ctx)
-	nextSlot := slots + uint64(1)
 	// TODO: Make queriesPerSlot an argument
 	queriesPerSlot := 5
 	for {
@@ -117,6 +116,7 @@ func (c *Collector) collectFromRelay(ctx context.Context, relay *builder.Client)
 		case <-ctx.Done():
 			return
 		case slot := <-slots:
+			nextSlot := slot + 1
 			// Querying for 5 bids per slot
 			for i := 0; i < queriesPerSlot; i++{
 				payload, err := c.collectBidFromRelay(ctx, relay, slot)
