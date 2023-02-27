@@ -108,7 +108,7 @@ func (c *Collector) collectFromRelay(ctx context.Context, relay *builder.Client)
 
 	relayID := relay.PublicKey
 
-	slots := c.clock.MultiTickSlots(ctx, 4)
+	slots := c.clock.TickSlots(ctx)
 	for {
 		select {
 		case <-ctx.Done():
