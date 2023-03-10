@@ -216,9 +216,9 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 		return nil, err
 	}
 	if expectedRandomness != header.Random {
-		return &InvalidBid{
-			Reason: "invalid random value",
-		}, nil
+		invalidBidErr.Context[ExpectedKey] = expectedRandomness
+		invalidBidErr.Context[ActualKey] = header.Random
+		return invalidBidErr, nil
 	}
 
 	expectedBlockNumber, err := a.consensusClient.GetBlockNumberForProposal(bidCtx.Slot)
