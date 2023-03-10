@@ -46,7 +46,8 @@ func (c *Clock) TickSlots(ctx context.Context) chan types.Slot {
 			currentSlot := c.CurrentSlot(now)
 			ch <- currentSlot
 			nextSlot := currentSlot + 1
-			nextSlotStart := c.SlotInSeconds(nextSlot)
+			// Adding 10seconds delay to get it closer to when validators query relays
+			nextSlotStart := c.SlotInSeconds(nextSlot) + 10
 			duration := time.Duration(nextSlotStart - now)
 			select {
 			case <-time.After(duration * time.Second):
