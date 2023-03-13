@@ -211,15 +211,15 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 		}
 	}
 
-	// expectedRandomness, err := a.consensusClient.GetRandomnessForProposal(bidCtx.Slot)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// if expectedRandomness != header.Random {
-	// 	return &InvalidBid{
-	// 		Reason: "invalid random value",
-	// 	}, nil
-	// }
+	expectedRandomness, err := a.consensusClient.GetRandomnessForProposal(bidCtx.Slot)
+	if err != nil {
+		return nil, err
+	}
+	if expectedRandomness != header.Random {
+		invalidBidErr.Context[ExpectedKey] = expectedRandomness
+		invalidBidErr.Context[ActualKey] = header.Random
+		return invalidBidErr, nil
+	}
 
 	expectedBlockNumber, err := a.consensusClient.GetBlockNumberForProposal(bidCtx.Slot)
 	if err != nil {
