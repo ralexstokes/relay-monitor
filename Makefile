@@ -9,7 +9,10 @@ clean:
 	git clean -fdx
 
 build:
-	go build -ldflags "-X cmd.Version=${VERSION} -X main.Version=${VERSION}" -v -o relay-monitor .
+	go build -ldflags "-X cmd.Version=${VERSION} -X main.Version=${VERSION}" -o ./bin/relay-monitor ./cmd/relay-monitor
+
+run:
+	./bin/relay-monitor
 
 test:
 	go test ./...

@@ -2,7 +2,9 @@ package data
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/avast/retry-go"
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
@@ -27,57 +29,104 @@ func NewCollector(zapLogger *zap.Logger, relays []*builder.Client, clock *consen
 	}
 }
 
-func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Client, slot types.Slot) (*BidEvent, error) {
-	parentHash, err := c.consensusClient.GetParentHash(ctx, slot)
+// collectBidFromRelay does most of the work for collecting the bid from the relay and getting
+// necessary "context" for the bid from the connected consensus client. If any step fails and
+// results in an error, or if the call to get the bid from the relay (via the `getHeader`
+// endpoint) does not return a bid, the error will be handled by the "retrier" function that will
+// effectivelly schedule another call to collectBidFromRelay to perform the same steps.
+func (collector *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Client, slot types.Slot) (*BidEvent, error) {
+	logger := collector.logger.Sugar()
+
+	parentHash, err := collector.consensusClient.GetParentHash(ctx, slot)
 	if err != nil {
 		return nil, err
 	}
-	publicKey, err := c.consensusClient.GetProposerPublicKey(ctx, slot)
+
+	publicKey, err := collector.consensusClient.GetProposerPublicKey(ctx, slot)
 	if err != nil {
 		return nil, err
 	}
+
+	// Request a bid via the `getHeader()` endpoint.
 	bid, err := relay.GetBid(slot, parentHash, *publicKey)
 	if err != nil {
 		return nil, err
 	}
+
+	// If there were no errors returned but the bid is `nil`, then the relay does not have a bid for
+	// this slot. The 'retrier' function will retry regardless.
 	if bid == nil {
 		return nil, nil
 	}
+
 	bidCtx := types.BidContext{
 		Slot:              slot,
 		ParentHash:        parentHash,
 		ProposerPublicKey: *publicKey,
 		RelayPublicKey:    relay.PublicKey,
 	}
-	event := &BidEvent{Context: &bidCtx, Bid: bid}
-	return event, nil
+
+	logger.Debugw("collected bid", "relay", relay.PublicKey, "context", bidCtx, "bid", bid)
+
+	bidEvent := &BidEvent{
+		Context: &bidCtx,
+		Bid:     bid,
+	}
+
+	// Send in the event to get processed / analyzed.
+	// TODO: instead pipe this to DB and have the analyzer read from DB (WIP)
+	collector.events <- Event{Payload: bidEvent}
+
+	return bidEvent, nil
 }
 
-func (c *Collector) collectFromRelay(ctx context.Context, relay *builder.Client) {
-	logger := c.logger.Sugar()
+// tryCollectBidFromRelay is a wrapper around collectBidFromRelay that handles the retry logic.
+func (collector *Collector) tryCollectBidFromRelay(ctx context.Context, relay *builder.Client, slot types.Slot) {
+	logger := collector.logger.Sugar()
 
-	relayID := relay.PublicKey
+	// Try to fetch the bid from client. If unavailable, setup a retry.
+	retry.Do(
+		func() error {
+			var err error
 
-	slots := c.clock.TickSlots(ctx)
+			// Try to collect the bid.
+			bid, err := collector.collectBidFromRelay(ctx, relay, slot)
+			if err != nil {
+				logger.Warnw("could not get bid from relay", "slot", slot, "error", err, "relay", relay.PublicKey, "retrying", RetryDelay)
+				return err
+			}
+			// There is no error but also no bid, so we need to retry still.
+			if bid == nil {
+				logger.Warnw("relay does not have bid", "slot", slot, "relay", relay.PublicKey, "retrying", RetryDelay)
+				return fmt.Errorf("relay did not have bid for slot")
+			}
+
+			// If no error, then no need to re-try, the bid has been collected.
+			return nil
+		},
+		CollectorDelayType,
+		CollectorRetryAttempts,
+		CollectorRetryDelay,
+	)
+}
+
+// collectFromRelay is the main loop for collecting bids from a relay. It will try to collect a bid
+// from the relay for each slot.
+func (collector *Collector) collectFromRelay(ctx context.Context, relay *builder.Client) {
+	logger := collector.logger.Sugar()
+
+	// A stream of slots.
+	slots := collector.clock.TickSlots(ctx)
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case slot := <-slots:
-			payload, err := c.collectBidFromRelay(ctx, relay, slot)
-			if err != nil {
-				logger.Warnw("could not get bid from relay", "error", err, "relayPublicKey", relayID, "slot", slot)
-				// TODO implement some retry logic...
-				continue
-			}
-			if payload == nil {
-				// No bid for this slot, continue
-				// TODO consider trying again...
-				continue
-			}
-			logger.Debugw("got bid", "relay", relayID, "context", payload.Context, "bid", payload.Bid)
-			// TODO what if this is slow
-			c.events <- Event{Payload: payload}
+			// New slot -- try to collect a bid from the relay.
+			logger.Infow("new slot, try to collect bid", "slot", slot, "relay", relay.PublicKey)
+
+			go collector.tryCollectBidFromRelay(ctx, relay, slot)
 		}
 	}
 }

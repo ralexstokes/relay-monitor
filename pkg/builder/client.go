@@ -20,6 +20,10 @@ type Client struct {
 	client    http.Client
 }
 
+func (c *Client) Endpoint() string {
+	return c.endpoint
+}
+
 func (c *Client) Hostname() string {
 	return c.hostname
 }
@@ -72,7 +76,7 @@ func (c *Client) GetStatus() error {
 	return nil
 }
 
-// GetBid implements the `getHeader` endpoint in the Builder API
+// GetBid implements the `getHeader` endpoint in the Builder API.
 // A return value of `(nil, nil)` indicates the relay was reachable but had no bid for the given parameters
 func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.PublicKey) (*types.Bid, error) {
 	bidUrl := c.endpoint + fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot, parentHash, publicKey)
