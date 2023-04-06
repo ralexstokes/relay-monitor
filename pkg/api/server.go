@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -63,7 +62,6 @@ func New(config *Config, logger *zap.Logger, analyzer *analysis.Analyzer, events
 }
 
 func (s *Server) handleBidsAnalyzedRequest(queryFilter *types.AnalysisQueryFilter, w http.ResponseWriter, r *http.Request) {
-
 	q := r.URL.Query()
 
 	var analysisCount uint64
@@ -119,7 +117,6 @@ func (s *Server) handleBidsAnalyzedRequest(queryFilter *types.AnalysisQueryFilte
 }
 
 func (s *Server) handleBidsAnalyzedFaultCountRequest(w http.ResponseWriter, r *http.Request) {
-
 	queryFilter := &types.AnalysisQueryFilter{
 		Category:   types.ValidBidCategory,
 		Comparator: "!=",
@@ -129,7 +126,6 @@ func (s *Server) handleBidsAnalyzedFaultCountRequest(w http.ResponseWriter, r *h
 }
 
 func (s *Server) handleBidsAnalyzedValidCountRequest(w http.ResponseWriter, r *http.Request) {
-
 	queryFilter := &types.AnalysisQueryFilter{
 		Category:   types.ValidBidCategory,
 		Comparator: "=",
@@ -140,50 +136,6 @@ func (s *Server) handleBidsAnalyzedValidCountRequest(w http.ResponseWriter, r *h
 
 func (s *Server) handleBidsAnalyzedCountRequest(w http.ResponseWriter, r *http.Request) {
 	s.handleBidsAnalyzedRequest(nil, w, r)
-}
-
-// `computeSpan` ensures that `startEpoch` and `endEpoch` cover a "sensible" span where:
-//   - `endEpoch` - `startEpoch` == `span` such that `startEpoch` >= 0 and `endEpoch` <= `math.MaxUint64`
-//     (so that the span is smaller than requested against the boundaries)
-func computeSpanFromRequest(startEpochRequest, endEpochRequest *types.Epoch, targetSpan uint64, currentEpoch types.Epoch) (types.Epoch, types.Epoch) {
-	var startEpoch types.Epoch
-	endEpoch := currentEpoch
-
-	if startEpochRequest == nil && endEpochRequest == nil {
-		diff := int(endEpoch) - int(targetSpan)
-		if diff < 0 {
-			startEpoch = 0
-		} else {
-			startEpoch = types.Epoch(diff)
-		}
-	} else if startEpochRequest != nil && endEpochRequest == nil {
-		startEpoch = *startEpochRequest
-		boundary := math.MaxUint64 - targetSpan
-		if startEpoch > boundary {
-			diff := startEpoch - boundary
-			endEpoch = startEpoch + diff
-		} else {
-			endEpoch = startEpoch + targetSpan
-		}
-	} else if startEpochRequest == nil && endEpochRequest != nil {
-		endEpoch = *endEpochRequest
-		if endEpoch > targetSpan {
-			startEpoch = endEpoch - targetSpan
-		} else {
-			startEpoch = 0
-		}
-	} else {
-		startEpoch = *startEpochRequest
-		endEpoch = *endEpochRequest
-	}
-	// TODO these can be quite far apart... scope so a caller can't cause a large amount of work
-	return startEpoch, endEpoch
-}
-
-func (s *Server) currentEpoch() types.Epoch {
-	now := time.Now().Unix()
-	slot := s.clock.CurrentSlot(now)
-	return s.clock.EpochForSlot(slot)
 }
 
 func (s *Server) currentSlot() types.Slot {
@@ -594,7 +546,6 @@ type apiError struct {
 }
 
 func (s *Server) respondError(w http.ResponseWriter, code int, message string) {
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	response := apiError{code, message}
@@ -609,7 +560,6 @@ func (s *Server) respondError(w http.ResponseWriter, code int, message string) {
 }
 
 func (s *Server) respondOK(w http.ResponseWriter, response any) {
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -619,7 +569,6 @@ func (s *Server) respondOK(w http.ResponseWriter, response any) {
 }
 
 func (s *Server) handleCountValidators(w http.ResponseWriter, r *http.Request) {
-
 	validators, err := s.store.GetCountValidators(context.Background())
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, err.Error())
@@ -634,7 +583,6 @@ func (s *Server) handleCountValidators(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCountValidatorsRegistrations(w http.ResponseWriter, r *http.Request) {
-
 	registrations, err := s.store.GetCountValidatorsRegistrations(context.Background())
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, err.Error())
@@ -684,7 +632,6 @@ func (s *Server) handleRegisterValidator(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleAuctionTranscript(w http.ResponseWriter, r *http.Request) {
-
 	var transcript types.AuctionTranscript
 	err := json.NewDecoder(r.Body).Decode(&transcript)
 	if err != nil {

@@ -24,7 +24,7 @@ func (a *Analyzer) validatePublicKey(ctx context.Context, bidCtx *types.BidConte
 // validateSignature verifies the signature of the bid message using the bid's public key and the
 // signature domain for the bid builder.
 func (a *Analyzer) validateSignature(ctx context.Context, bidCtx *types.BidContext, bid *types.Bid) (*types.InvalidBid, error) {
-	validSignature, err := crypto.VerifySignature(bid.Message, a.consensusClient.SignatureDomainForBuilder(), bid.Message.Pubkey[:], bid.Signature[:])
+	validSignature, err := crypto.VerifySignature(bid.Message, a.consensusClient.SignatureDomainForBuilder(), bidCtx.RelayPublicKey[:], bid.Signature[:])
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func (a *Analyzer) validateHeader(ctx context.Context, bidCtx *types.BidContext,
 }
 
 // validateGasLimit validates the gas limit of a bid message to make sure it is within the bounds.
-func (a *Analyzer) validateGasLimit(ctx context.Context, gasLimit uint64, gasLimitPreference uint64, blockNumber uint64) (bool, error) {
+func (a *Analyzer) validateGasLimit(ctx context.Context, gasLimit, gasLimitPreference, blockNumber uint64) (bool, error) {
 	if gasLimit == gasLimitPreference {
 		return true, nil
 	}
@@ -187,8 +187,17 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 		return nil, nil
 	}
 
+	// Validate that the signature is correct.
+	invalidBid, err := a.validateSignature(ctx, bidCtx, bid)
+	if err != nil {
+		return nil, err
+	}
+	if invalidBid != nil {
+		return invalidBid, nil
+	}
+
 	// Validate that the public key is correct.
-	invalidBid, err := a.validatePublicKey(ctx, bidCtx, bid)
+	invalidBid, err = a.validatePublicKey(ctx, bidCtx, bid)
 	if err != nil {
 		return nil, err
 	}

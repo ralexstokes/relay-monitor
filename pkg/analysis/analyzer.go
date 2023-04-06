@@ -180,7 +180,6 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 	// TransactionsRoot
 
 	// TODO save analysis results
-
 }
 
 func (a *Analyzer) Run(ctx context.Context) error {

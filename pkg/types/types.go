@@ -147,9 +147,11 @@ type Relay struct {
 	Endpoint string
 }
 
-type ScoreReport = map[types.PublicKey]*Score
-type FaultStatsReport = map[types.PublicKey]*FaultStats
-type FaultRecordsReport = map[types.PublicKey]*FaultRecords
+type (
+	ScoreReport        = map[types.PublicKey]*Score
+	FaultStatsReport   = map[types.PublicKey]*FaultStats
+	FaultRecordsReport = map[types.PublicKey]*FaultRecords
+)
 
 type Score struct {
 	Score float64 `json:"score"`

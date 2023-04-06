@@ -50,7 +50,7 @@ func (scorer *Scorer) ComputeReputationScore(faultRecords []*types.Record) (floa
 }
 
 // ComputeBidDeliveryScore computes a score based on the number of bids delivered.
-func (scorer *Scorer) ComputeBidDeliveryScore(countBidsAnalyzed uint64, currentSlot uint64, slotBounds *types.SlotBounds) (float64, error) {
+func (scorer *Scorer) ComputeBidDeliveryScore(countBidsAnalyzed, currentSlot uint64, slotBounds *types.SlotBounds) (float64, error) {
 	var slotDiff uint64
 	if slotBounds.StartSlot == nil && slotBounds.EndSlot == nil {
 		slotDiff = currentSlot
