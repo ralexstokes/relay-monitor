@@ -24,10 +24,9 @@ import (
 )
 
 const (
-	methodNotSupported              = "method not supported"
-	RegisterValidatorEndpoint       = "/eth/v1/builder/validators"
-	PostAuctionTranscriptEndpoint   = "/monitor/v1/transcript"
-	DefaultEpochSpanForFaultsWindow = 256
+	methodNotSupported            = "method not supported"
+	RegisterValidatorEndpoint     = "/eth/v1/builder/validators"
+	PostAuctionTranscriptEndpoint = "/monitor/v1/transcript"
 
 	// Relay fault endpoints.
 	GetFaultStatsReportEndpoint   = "/monitor/v1/fault/stats"
@@ -652,10 +651,7 @@ func (s *Server) handleAuctionTranscript(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *Server) Run(ctx context.Context) error {
-	host := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
-	s.logger.Infof("API server listening on %s", host)
-
+func (s *Server) getRouter() http.Handler {
 	r := mux.NewRouter()
 	r.HandleFunc("/", get(s.handleFaultStatsReportRequest))
 
@@ -687,7 +683,15 @@ func (s *Server) Run(ctx context.Context) error {
 	r.HandleFunc(GetBidsAnalyzedValidCount, get(s.handleBidsAnalyzedValidCountRequest))
 	r.HandleFunc(GetBidsAnalyzedFaultCount, get(s.handleBidsAnalyzedFaultCountRequest))
 
-	return http.ListenAndServe(host, r)
+	return r
+}
+
+func (s *Server) Run(ctx context.Context) error {
+	host := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
+	s.logger.Infof("API server listening on %s", host)
+
+	router := s.getRouter()
+	return http.ListenAndServe(host, router)
 }
 
 func get(handler http.HandlerFunc) http.HandlerFunc {

@@ -165,7 +165,7 @@ func (reporter *Reporter) GetFaultStatsReport(ctx context.Context, slotBounds *t
 			reporter.logger.Warnf("could not get fault stats for relay %s: %v", relay.Pubkey, err)
 			continue
 		}
-		faultStatsReport[relay.Pubkey] = faultStats
+		faultStatsReport[relay.Pubkey.String()] = faultStats
 	}
 	return faultStatsReport, nil
 }
@@ -183,7 +183,7 @@ func (reporter *Reporter) GetFaultRecordsReport(ctx context.Context, slotBounds 
 			reporter.logger.Warnf("could not get fault records for relay %s: %v", relay.Pubkey, err)
 			continue
 		}
-		faultRecordsReport[relay.Pubkey] = faultRecords
+		faultRecordsReport[relay.Pubkey.String()] = faultRecords
 	}
 	return faultRecordsReport, nil
 }
@@ -227,7 +227,7 @@ func (reporter *Reporter) GetReputationScoreReport(ctx context.Context, slotBoun
 			reporter.logger.Warnf("could not get score for relay %s: %v", relay.Pubkey, err)
 			continue
 		}
-		scoresReport[relay.Pubkey] = score
+		scoresReport[relay.Pubkey.String()] = score
 	}
 	return scoresReport, nil
 }
@@ -267,7 +267,7 @@ func (reporter *Reporter) GetBidDeliveryScoreReport(ctx context.Context, slotBou
 			reporter.logger.Warnf("could not get score for relay %s: %v", relay.Pubkey, err)
 			continue
 		}
-		scoresReport[relay.Pubkey] = score
+		scoresReport[relay.Pubkey.String()] = score
 	}
 	return scoresReport, nil
 }

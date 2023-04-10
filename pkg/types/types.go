@@ -150,11 +150,6 @@ func (a *VersionedAcceptance) Message() (boostTypes.HashTreeRoot, error) {
 	}
 }
 
-type Coordinate struct {
-	Slot Slot
-	Root phase0.Root
-}
-
 // VersionedBid is a wrapper around VersionedSignedBuilderBid that implements additional
 // methods to make getting data easier.
 type VersionedBid struct {
@@ -474,6 +469,11 @@ func (b *VersionedBid) BaseFeeForGas() ([32]byte, error) {
 	}
 }
 
+type Coordinate struct {
+	Slot Slot
+	Root phase0.Root
+}
+
 type InvalidBid struct {
 	Category AnalysisCategory
 	Reason   AnalysisReason
@@ -499,9 +499,9 @@ type Relay struct {
 }
 
 type (
-	ScoreReport        = map[phase0.BLSPubKey]*Score
-	FaultStatsReport   = map[phase0.BLSPubKey]*FaultStats
-	FaultRecordsReport = map[phase0.BLSPubKey]*FaultRecords
+	ScoreReport        = map[string]*Score
+	FaultStatsReport   = map[string]*FaultStats
+	FaultRecordsReport = map[string]*FaultRecords
 )
 
 type Score struct {
