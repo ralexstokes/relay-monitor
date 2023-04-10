@@ -1,10 +1,8 @@
 package types
 
 import (
-	"database/sql"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/api"
@@ -27,6 +25,7 @@ type (
 	SignedBlindedBeaconBlock    = api.VersionedSignedBlindedBeaconBlock
 )
 
+// SlotFromString converts a slot string in base 10 to a slot.
 func SlotFromString(slotString string) (phase0.Slot, error) {
 	startSlotValue, err := strconv.ParseUint(slotString, 10, 64)
 	if err != nil {
@@ -35,6 +34,7 @@ func SlotFromString(slotString string) (phase0.Slot, error) {
 	return phase0.Slot(startSlotValue), nil
 }
 
+// BLSPubKeyFromHexString converts a BLS public key hex string to a BLS public key.
 func BLSPubKeyFromHexString(hexString string) (phase0.BLSPubKey, error) {
 	var publicKey boostTypes.PublicKey
 	err := publicKey.UnmarshalText([]byte(hexString))
@@ -44,10 +44,13 @@ func BLSPubKeyFromHexString(hexString string) (phase0.BLSPubKey, error) {
 	return phase0.BLSPubKey(publicKey), nil
 }
 
+// VerionedAcceptance is a wrapper around VersionedSignedBlindedBeaconBlock that implements additional
+// methods to make getting data easier.
 type VersionedAcceptance struct {
 	Block *api.VersionedSignedBlindedBeaconBlock
 }
 
+// Slot returns the slot of the signed beacon block.
 func (a *VersionedAcceptance) Slot() (phase0.Slot, error) {
 	if a == nil {
 		return 0, fmt.Errorf("nil struct")
@@ -58,6 +61,7 @@ func (a *VersionedAcceptance) Slot() (phase0.Slot, error) {
 	return a.Block.Slot()
 }
 
+// ParentRoot returns the parent root of the signed beacon block.
 func (a *VersionedAcceptance) ParentRoot() (phase0.Root, error) {
 	if a == nil {
 		return phase0.Root{}, fmt.Errorf("nil struct")
@@ -68,6 +72,7 @@ func (a *VersionedAcceptance) ParentRoot() (phase0.Root, error) {
 	return a.Block.ParentRoot()
 }
 
+// Signature returns the signature of the signed beacon block.
 func (a *VersionedAcceptance) Signature() (phase0.BLSSignature, error) {
 	if a == nil {
 		return phase0.BLSSignature{}, fmt.Errorf("nil struct")
@@ -91,6 +96,7 @@ func (a *VersionedAcceptance) Signature() (phase0.BLSSignature, error) {
 	}
 }
 
+// ProposerIndex returns the proposer index of the signed beacon block.
 func (a *VersionedAcceptance) ProposerIndex() (phase0.ValidatorIndex, error) {
 	if a == nil {
 		return 0, fmt.Errorf("nil struct")
@@ -120,6 +126,7 @@ func (a *VersionedAcceptance) ProposerIndex() (phase0.ValidatorIndex, error) {
 	}
 }
 
+// Message returns the message of the signed beacon block.
 func (a *VersionedAcceptance) Message() (boostTypes.HashTreeRoot, error) {
 	if a == nil {
 		return nil, fmt.Errorf("nil struct")
@@ -148,10 +155,14 @@ type Coordinate struct {
 	Root phase0.Root
 }
 
+// VersionedBid is a wrapper around VersionedSignedBuilderBid that implements additional
+// methods to make getting data easier.
 type VersionedBid struct {
 	Bid *spec.VersionedSignedBuilderBid
 }
 
+// Builder returns the BLS public key of the bid builder. Coming from the relay this is
+// the BLS public key of the relay.
 func (b *VersionedBid) Builder() (phase0.BLSPubKey, error) {
 	if b == nil {
 		return phase0.BLSPubKey{}, fmt.Errorf("nil struct")
@@ -162,6 +173,7 @@ func (b *VersionedBid) Builder() (phase0.BLSPubKey, error) {
 	return b.Bid.Builder()
 }
 
+// Signature returns the signature of the signed builder bid.
 func (b *VersionedBid) Signature() (phase0.BLSSignature, error) {
 	if b == nil {
 		return phase0.BLSSignature{}, fmt.Errorf("nil struct")
@@ -172,6 +184,7 @@ func (b *VersionedBid) Signature() (phase0.BLSSignature, error) {
 	return b.Bid.Signature()
 }
 
+// ParentHash returns the parent hash of the signed builder bid.
 func (b *VersionedBid) ParentHash() (phase0.Hash32, error) {
 	if b == nil {
 		return phase0.Hash32{}, fmt.Errorf("nil struct")
@@ -182,6 +195,7 @@ func (b *VersionedBid) ParentHash() (phase0.Hash32, error) {
 	return b.Bid.ParentHash()
 }
 
+// FeeRecipient returns the fee recipient of the signed builder bid.
 func (b *VersionedBid) FeeRecipient() (bellatrix.ExecutionAddress, error) {
 	if b == nil {
 		return bellatrix.ExecutionAddress{}, fmt.Errorf("nil struct")
@@ -192,6 +206,7 @@ func (b *VersionedBid) FeeRecipient() (bellatrix.ExecutionAddress, error) {
 	return b.Bid.FeeRecipient()
 }
 
+// Value returns the value of the signed builder bid.
 func (b *VersionedBid) Value() (*uint256.Int, error) {
 	if b == nil {
 		return nil, fmt.Errorf("nil struct")
@@ -202,6 +217,7 @@ func (b *VersionedBid) Value() (*uint256.Int, error) {
 	return b.Bid.Value()
 }
 
+// Timestamp returns the timestamp of the signed builder bid.
 func (b *VersionedBid) Timestamp() (uint64, error) {
 	if b == nil {
 		return 0, fmt.Errorf("nil struct")
@@ -212,6 +228,7 @@ func (b *VersionedBid) Timestamp() (uint64, error) {
 	return b.Bid.Timestamp()
 }
 
+// Message returns the message of the signed builder bid.
 func (b *VersionedBid) Message() (boostTypes.HashTreeRoot, error) {
 	if b == nil {
 		return nil, fmt.Errorf("nil struct")
@@ -241,6 +258,7 @@ func (b *VersionedBid) Message() (boostTypes.HashTreeRoot, error) {
 	}
 }
 
+// PrevRandao returns the RANDAO of the signed builder bid.
 func (b *VersionedBid) PrevRandao() (phase0.Hash32, error) {
 	if b == nil {
 		return phase0.Hash32{}, fmt.Errorf("nil struct")
@@ -276,6 +294,7 @@ func (b *VersionedBid) PrevRandao() (phase0.Hash32, error) {
 	}
 }
 
+// BlockNumber returns the block number of the signed builder bid.
 func (b *VersionedBid) BlockNumber() (uint64, error) {
 	if b == nil {
 		return 0, fmt.Errorf("nil struct")
@@ -311,6 +330,7 @@ func (b *VersionedBid) BlockNumber() (uint64, error) {
 	}
 }
 
+// BlockHash returns the block hash of the signed builder bid.
 func (b *VersionedBid) BlockHash() (phase0.Hash32, error) {
 	if b == nil {
 		return phase0.Hash32{}, fmt.Errorf("nil struct")
@@ -346,6 +366,7 @@ func (b *VersionedBid) BlockHash() (phase0.Hash32, error) {
 	}
 }
 
+// GasUsed returns the gas used of the signed builder bid.
 func (b *VersionedBid) GasUsed() (uint64, error) {
 	if b == nil {
 		return 0, fmt.Errorf("nil struct")
@@ -381,6 +402,7 @@ func (b *VersionedBid) GasUsed() (uint64, error) {
 	}
 }
 
+// GasLimit returns the gas limit of the signed builder bid.
 func (b *VersionedBid) GasLimit() (uint64, error) {
 	if b == nil {
 		return 0, fmt.Errorf("nil struct")
@@ -416,6 +438,7 @@ func (b *VersionedBid) GasLimit() (uint64, error) {
 	}
 }
 
+// BaseFeeForGas returns the base fee for gas of the signed builder bid.
 func (b *VersionedBid) BaseFeeForGas() ([32]byte, error) {
 	if b == nil {
 		return [32]byte{}, fmt.Errorf("nil struct")
@@ -451,6 +474,12 @@ func (b *VersionedBid) BaseFeeForGas() ([32]byte, error) {
 	}
 }
 
+type InvalidBid struct {
+	Category AnalysisCategory
+	Reason   AnalysisReason
+	Context  map[string]interface{}
+}
+
 type AuctionTranscript struct {
 	Bid        VersionedBid        `json:"bid"`
 	Acceptance VersionedAcceptance `json:"acceptance"`
@@ -461,108 +490,6 @@ type BidContext struct {
 	ParentHash        phase0.Hash32    `json:"parent_hash"`
 	ProposerPublicKey phase0.BLSPubKey `json:"proposer_public_key"`
 	RelayPublicKey    phase0.BLSPubKey `json:"relay_public_key"`
-}
-
-// Database types
-
-type BidEntry struct {
-	ID         int64     `db:"id"`
-	InsertedAt time.Time `db:"inserted_at"`
-
-	// Bid "context" data
-	Slot           uint64 `db:"slot"`
-	ParentHash     string `db:"parent_hash"`
-	RelayPubkey    string `db:"relay_pubkey"`
-	ProposerPubkey string `db:"proposer_pubkey"`
-
-	// Bidtrace data (public data about a bid)
-	BlockHash            string `db:"block_hash"`
-	BuilderPubkey        string `db:"builder_pubkey"`
-	ProposerFeeRecipient string `db:"proposer_fee_recipient"`
-
-	GasUsed  uint64 `db:"gas_used"`
-	GasLimit uint64 `db:"gas_limit"`
-	Value    string `db:"value"`
-
-	Bid         string `db:"bid"`
-	WasAccepted bool   `db:"was_accepted"`
-
-	Signature string `db:"signature"`
-}
-
-type AcceptanceEntry struct {
-	ID         int64     `db:"id"`
-	InsertedAt time.Time `db:"inserted_at"`
-
-	SignedBlindedBeaconBlock sql.NullString `db:"signed_blinded_beacon_block"`
-
-	// Bid acceptance "context" data
-	Slot           uint64 `db:"slot"`
-	ParentHash     string `db:"parent_hash"`
-	RelayPubkey    string `db:"relay_pubkey"`
-	ProposerPubkey string `db:"proposer_pubkey"`
-
-	Signature string `db:"signature"`
-}
-
-type InvalidBid struct {
-	Category AnalysisCategory
-	Reason   AnalysisReason
-	Context  map[string]interface{}
-}
-
-type AnalysisEntry struct {
-	ID         int64     `db:"id"`
-	InsertedAt time.Time `db:"inserted_at"`
-
-	// Bid analysis "context" data
-	Slot           uint64 `db:"slot"`
-	ParentHash     string `db:"parent_hash"`
-	RelayPubkey    string `db:"relay_pubkey"`
-	ProposerPubkey string `db:"proposer_pubkey"`
-
-	Category AnalysisCategory `db:"category"`
-	Reason   string           `db:"reason"`
-}
-
-type AnalysisCategory uint
-
-const (
-	ValidBidCategory AnalysisCategory = iota
-	InvalidBidPublicKeyCategory
-	InvalidBidSignatureCategory
-	InvalidBidConsensusCategory
-	InvalidBidIgnoredPreferencesCategory
-)
-
-type AnalysisReason string
-
-const (
-	AnalysisReasonEmpty                                  AnalysisReason = ""
-	AnalysisReasonIncorrectPublicKey                     AnalysisReason = "incorrect public key from relay"
-	AnalysisReasonInvalidSignature                       AnalysisReason = "invalid signature"
-	AnalysisReasonInvalidParentHash                      AnalysisReason = "invalid parent hash"
-	AnalysisReasonInvalidRandomValue                     AnalysisReason = "invalid random value"
-	AnalysisReasonInvalidBlockNumber                     AnalysisReason = "invalid block number"
-	AnalysisReasonInvalidTimestamp                       AnalysisReason = "invalid timestamp"
-	AnalysisReasonInvalidBaseFee                         AnalysisReason = "invalid base fee"
-	AnalysisReasonInvalidGasUsed                         AnalysisReason = "gas used is higher than gas limit"
-	AnalysisReasonIgnoredValidatorPreferenceGasLimit     AnalysisReason = "ignored validator gas limit preference"
-	AnalysisReasonIgnoredValidatorPreferenceFeeRecipient AnalysisReason = "ignored validator fee recipient preference"
-)
-
-type AnalysisQueryFilter struct {
-	Category   AnalysisCategory
-	Comparator string
-}
-
-type RelayEntry struct {
-	ID         int64     `db:"id"`
-	InsertedAt time.Time `db:"inserted_at"`
-
-	Pubkey   string `db:"pubkey"`
-	Hostname string `db:"hostname"`
-	Endpoint string `db:"endpoint"`
 }
 
 type Relay struct {
@@ -627,4 +554,35 @@ type Meta struct {
 type SlotBounds struct {
 	StartSlot *Slot `json:"start_slot"`
 	EndSlot   *Slot `json:"end_slot"`
+}
+
+type AnalysisCategory uint
+
+const (
+	ValidBidCategory AnalysisCategory = iota
+	InvalidBidPublicKeyCategory
+	InvalidBidSignatureCategory
+	InvalidBidConsensusCategory
+	InvalidBidIgnoredPreferencesCategory
+)
+
+type AnalysisReason string
+
+const (
+	AnalysisReasonEmpty                                  AnalysisReason = ""
+	AnalysisReasonIncorrectPublicKey                     AnalysisReason = "incorrect public key from relay"
+	AnalysisReasonInvalidSignature                       AnalysisReason = "invalid signature"
+	AnalysisReasonInvalidParentHash                      AnalysisReason = "invalid parent hash"
+	AnalysisReasonInvalidRandomValue                     AnalysisReason = "invalid random value"
+	AnalysisReasonInvalidBlockNumber                     AnalysisReason = "invalid block number"
+	AnalysisReasonInvalidTimestamp                       AnalysisReason = "invalid timestamp"
+	AnalysisReasonInvalidBaseFee                         AnalysisReason = "invalid base fee"
+	AnalysisReasonInvalidGasUsed                         AnalysisReason = "gas used is higher than gas limit"
+	AnalysisReasonIgnoredValidatorPreferenceGasLimit     AnalysisReason = "ignored validator gas limit preference"
+	AnalysisReasonIgnoredValidatorPreferenceFeeRecipient AnalysisReason = "ignored validator fee recipient preference"
+)
+
+type AnalysisQueryFilter struct {
+	Category   AnalysisCategory
+	Comparator string
 }

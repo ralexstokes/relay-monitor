@@ -86,7 +86,7 @@ func (store *PostgresStore) Close() error {
 
 func (store *PostgresStore) PutBid(ctx context.Context, bidCtx *types.BidContext, bid *types.VersionedBid) error {
 	// Convert into a format that works better with the DB.
-	bidEntry, err := types.BidWithContextToBidEntry(bidCtx, bid)
+	bidEntry, err := BidWithContextToBidEntry(bidCtx, bid)
 	if err != nil {
 		return err
 	}
@@ -107,19 +107,19 @@ func (store *PostgresStore) GetBid(ctx context.Context, bidCtx *types.BidContext
 	FROM ` + TableBids + `
 	WHERE slot=$1 AND parent_hash=$2 AND relay_pubkey=$3 AND proposer_pubkey=$4`
 
-	bidEntry := &types.BidEntry{}
+	bidEntry := &BidEntry{}
 	err := store.DB.Get(bidEntry, query, bidCtx.Slot, bidCtx.ParentHash.String(), bidCtx.RelayPublicKey.String(), bidCtx.ProposerPublicKey.String())
 	if err != nil {
 		return nil, err
 	}
 	store.logger.Info("fetched bid from db", zap.Uint64("slot", uint64(bidCtx.Slot)), zap.String("parent_hash", bidCtx.ParentHash.String()))
 
-	return types.BidEntryToBid(bidEntry)
+	return BidEntryToBid(bidEntry)
 }
 
 func (store *PostgresStore) PutAcceptance(ctx context.Context, bidCtx *types.BidContext, acceptance *types.VersionedAcceptance) error {
 	// Convert into a format that works better with the DB.
-	acceptanceEntry, err := types.AcceptanceWithContextToAcceptanceEntry(bidCtx, acceptance)
+	acceptanceEntry, err := AcceptanceWithContextToAcceptanceEntry(bidCtx, acceptance)
 	if err != nil {
 		return err
 	}
@@ -173,7 +173,7 @@ func (store *PostgresStore) GetValidatorRegistrations(ctx context.Context, publi
 	}
 	store.logger.Info("fetched validator registrations from db", zap.String("pubkey", publicKey.String()))
 
-	return types.ValidatorRegistrationEntriesToSignedValidatorRegistrations(entries)
+	return ValidatorRegistrationEntriesToSignedValidatorRegistrations(entries)
 }
 
 func (store *PostgresStore) GetLatestValidatorRegistration(ctx context.Context, publicKey types.PublicKey) (*types.SignedValidatorRegistration, error) {
@@ -194,7 +194,7 @@ func (store *PostgresStore) GetLatestValidatorRegistration(ctx context.Context, 
 	}
 	store.logger.Info("fetched latest validator registration from db", zap.String("pubkey", publicKey.String()))
 
-	return types.ValidatorRegistrationEntryToSignedValidatorRegistration(entry)
+	return ValidatorRegistrationEntryToSignedValidatorRegistration(entry)
 }
 
 func (store *PostgresStore) GetCountValidatorsRegistrations(ctx context.Context) (count uint, err error) {
@@ -213,7 +213,7 @@ func (store *PostgresStore) GetCountValidators(ctx context.Context) (count uint,
 
 func (store *PostgresStore) PutBidAnalysis(ctx context.Context, bidCtx *types.BidContext, invalidBid *types.InvalidBid) error {
 	// Convert into a format that works better with the DB.
-	analysisEntry, err := types.InvalidBidToAnalysisEntry(bidCtx, invalidBid)
+	analysisEntry, err := InvalidBidToAnalysisEntry(bidCtx, invalidBid)
 	if err != nil {
 		return err
 	}
@@ -278,7 +278,7 @@ func (store *PostgresStore) GetCountAnalysisWithinSlotBounds(ctx context.Context
 
 func (store *PostgresStore) PutRelay(ctx context.Context, relay *types.Relay) error {
 	// Convert into a format that works better with the DB.
-	entry, err := types.RelayToRelayEntry(relay)
+	entry, err := RelayToRelayEntry(relay)
 	if err != nil {
 		return err
 	}
@@ -306,27 +306,27 @@ func (store *PostgresStore) PutRelay(ctx context.Context, relay *types.Relay) er
 func (store *PostgresStore) GetRelay(ctx context.Context, publicKey types.PublicKey) (*types.Relay, error) {
 	query := `SELECT pubkey, hostname, endpoint FROM ` + TableRelays + ` WHERE pubkey=$1;`
 
-	entry := &types.RelayEntry{}
+	entry := &RelayEntry{}
 	err := store.DB.Get(entry, query, publicKey.String())
 	if err != nil {
 		return nil, err
 	}
 	store.logger.Info("fetched relay from db", zap.String("pubkey", publicKey.String()))
 
-	return types.RelayEntryToRelay(entry)
+	return RelayEntryToRelay(entry)
 }
 
 func (store *PostgresStore) GetRelays(ctx context.Context) ([]*types.Relay, error) {
 	query := `SELECT pubkey, hostname, endpoint FROM ` + TableRelays + `;`
 
-	var entries []*types.RelayEntry
+	var entries []*RelayEntry
 	err := store.DB.Select(&entries, query)
 	if err != nil {
 		return nil, err
 	}
 	store.logger.Info("fetched relays from db")
 
-	return types.RelayEntriesToRelays(entries)
+	return RelayEntriesToRelays(entries)
 }
 
 func (store *PostgresStore) GetRecordsAnalysisWithinSlotBounds(ctx context.Context, relayPubkey string, slotBounds *types.SlotBounds, filter *types.AnalysisQueryFilter) ([]*types.Record, error) {

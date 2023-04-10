@@ -1,4 +1,4 @@
-package types
+package store
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"github.com/attestantio/go-builder-client/spec"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
 	mev_boost_relay_types "github.com/flashbots/mev-boost-relay/database"
+	"github.com/ralexstokes/relay-monitor/pkg/types"
 )
 
 // Wrapper around `mev-boost-relay` converter util function of validator registration entry (DB) to a signed validator registration.
@@ -28,7 +29,7 @@ func ValidatorRegistrationEntriesToSignedValidatorRegistrations(entries []*mev_b
 }
 
 // AcceptanceEntryToSignedBlindedBeaconBlock converts a signed blinded beacon block to an acceptance entry.
-func AcceptanceWithContextToAcceptanceEntry(bidCtx *BidContext, acceptance *VersionedAcceptance) (*AcceptanceEntry, error) {
+func AcceptanceWithContextToAcceptanceEntry(bidCtx *types.BidContext, acceptance *types.VersionedAcceptance) (*AcceptanceEntry, error) {
 	_acceptance, err := json.Marshal(acceptance)
 	if err != nil {
 		return nil, err
@@ -53,7 +54,7 @@ func AcceptanceWithContextToAcceptanceEntry(bidCtx *BidContext, acceptance *Vers
 }
 
 // BidEntryToSignedBid converts a signed builder bid to a bid entry.
-func BidWithContextToBidEntry(bidCtx *BidContext, bid *VersionedBid) (*BidEntry, error) {
+func BidWithContextToBidEntry(bidCtx *types.BidContext, bid *types.VersionedBid) (*BidEntry, error) {
 	builderBid := bid.Bid
 
 	_bid, err := json.Marshal(builderBid)
@@ -114,7 +115,7 @@ func BidWithContextToBidEntry(bidCtx *BidContext, bid *VersionedBid) (*BidEntry,
 }
 
 // BidEntryToBid converts a bid entry to a signed builder bid.
-func BidEntryToBid(bidEntry *BidEntry) (*VersionedBid, error) {
+func BidEntryToBid(bidEntry *BidEntry) (*types.VersionedBid, error) {
 	builderBid := &spec.VersionedSignedBuilderBid{}
 
 	// JSON parse the BuilderBid.
@@ -123,13 +124,13 @@ func BidEntryToBid(bidEntry *BidEntry) (*VersionedBid, error) {
 		return nil, err
 	}
 
-	return &VersionedBid{
+	return &types.VersionedBid{
 		Bid: builderBid,
 	}, nil
 }
 
 // InvalidBidToAnalysisEntry converts an invalid bid to an analysis entry.
-func InvalidBidToAnalysisEntry(bidCtx *BidContext, invalidBid *InvalidBid) (*AnalysisEntry, error) {
+func InvalidBidToAnalysisEntry(bidCtx *types.BidContext, invalidBid *types.InvalidBid) (*AnalysisEntry, error) {
 	if bidCtx == nil {
 		return nil, fmt.Errorf("no bid context for analysis entry")
 	}
@@ -149,14 +150,14 @@ func InvalidBidToAnalysisEntry(bidCtx *BidContext, invalidBid *InvalidBid) (*Ana
 		analysisEntry.Category = invalidBid.Category
 		analysisEntry.Reason = string(invalidBid.Reason)
 	} else {
-		analysisEntry.Category = ValidBidCategory
+		analysisEntry.Category = types.ValidBidCategory
 	}
 
 	return analysisEntry, nil
 }
 
 // RelayToRelayEntry converts a relay struct to a relay entry.
-func RelayToRelayEntry(relay *Relay) (*RelayEntry, error) {
+func RelayToRelayEntry(relay *types.Relay) (*RelayEntry, error) {
 	return &RelayEntry{
 		Pubkey:   relay.Pubkey.String(),
 		Hostname: relay.Hostname,
@@ -165,13 +166,13 @@ func RelayToRelayEntry(relay *Relay) (*RelayEntry, error) {
 }
 
 // RelayEntryToRelay converts a relay entry to a relay struct.
-func RelayEntryToRelay(relayEntry *RelayEntry) (*Relay, error) {
-	pubkey, err := BLSPubKeyFromHexString(relayEntry.Pubkey)
+func RelayEntryToRelay(relayEntry *RelayEntry) (*types.Relay, error) {
+	pubkey, err := types.BLSPubKeyFromHexString(relayEntry.Pubkey)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Relay{
+	return &types.Relay{
 		Pubkey:   pubkey,
 		Hostname: relayEntry.Hostname,
 		Endpoint: relayEntry.Endpoint,
@@ -179,7 +180,7 @@ func RelayEntryToRelay(relayEntry *RelayEntry) (*Relay, error) {
 }
 
 // RelayEntriesToRelays converts a list of relay entries to a list of relay structs.
-func RelayEntriesToRelays(relayEntries []*RelayEntry) (relays []*Relay, err error) {
+func RelayEntriesToRelays(relayEntries []*RelayEntry) (relays []*types.Relay, err error) {
 	for _, entry := range relayEntries {
 		relay, err := RelayEntryToRelay(entry)
 		if err != nil {
