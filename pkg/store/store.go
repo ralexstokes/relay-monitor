@@ -9,16 +9,16 @@ import (
 
 // Interface for the state "storer" that a relay monitor can use for storing data.
 type Storer interface {
-	PutBid(context.Context, *types.BidContext, *types.Bid) error
+	PutBid(context.Context, *types.BidContext, *types.VersionedBid) error
 	PutValidatorRegistration(context.Context, *types.SignedValidatorRegistration) error
-	PutAcceptance(context.Context, *types.BidContext, *types.SignedBlindedBeaconBlock) error
+	PutAcceptance(context.Context, *types.BidContext, *types.VersionedAcceptance) error
 
-	GetBid(context.Context, *types.BidContext) (*types.Bid, error)
+	GetBid(context.Context, *types.BidContext) (*types.VersionedBid, error)
 
 	// `GetValidatorRegistrations` returns all known registrations for the validator's public key, sorted by timestamp (increasing).
-	GetValidatorRegistrations(context.Context, *types.PublicKey) ([]*types.SignedValidatorRegistration, error)
+	GetValidatorRegistrations(context.Context, types.PublicKey) ([]*types.SignedValidatorRegistration, error)
 	// `GetLatestValidatorRegistration` returns the latest known registration for the validator's public key.
-	GetLatestValidatorRegistration(context.Context, *types.PublicKey) (*types.SignedValidatorRegistration, error)
+	GetLatestValidatorRegistration(context.Context, types.PublicKey) (*types.SignedValidatorRegistration, error)
 	// `GetCountValidatorsRegistrations`returns the total number of valid registrations processed.
 	GetCountValidatorsRegistrations(ctx context.Context) (uint, error)
 	// `GetCountValidators`returns the number of validators that have successfully submitted at least one registration.
@@ -43,7 +43,7 @@ type Storer interface {
 	PutBidAnalysis(context.Context, *types.BidContext, *types.InvalidBid) error
 
 	PutRelay(context.Context, *types.Relay) error
-	GetRelay(context.Context, *types.PublicKey) (*types.Relay, error)
+	GetRelay(context.Context, types.PublicKey) (*types.Relay, error)
 	GetRelays(context.Context) ([]*types.Relay, error)
 
 	// Analysis metrics getters.

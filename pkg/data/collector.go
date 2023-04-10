@@ -85,7 +85,7 @@ func (collector *Collector) tryCollectBidFromRelay(ctx context.Context, relay *b
 	logger := collector.logger.Sugar()
 
 	// Try to fetch the bid from client. If unavailable, setup a retry.
-	err := retry.Do(
+	_ = retry.Do(
 		func() error {
 			var err error
 
@@ -108,9 +108,6 @@ func (collector *Collector) tryCollectBidFromRelay(ctx context.Context, relay *b
 		CollectorRetryAttempts,
 		CollectorRetryDelay,
 	)
-	if err != nil {
-		logger.Errorw("error collecting bid from relay", "slot", slot, "error", err, "relay", relay.PublicKey, "retrying", RetryDelay)
-	}
 }
 
 // collectFromRelay is the main loop for collecting bids from a relay. It will try to collect a bid

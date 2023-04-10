@@ -13,10 +13,10 @@ func BuildSlotBoundsFilterClause(query string, slotBounds *types.SlotBounds) str
 		return query
 	}
 	if slotBounds.StartSlot != nil {
-		query = query + ` AND slot >= ` + strconv.FormatUint(*slotBounds.StartSlot, 10)
+		query = query + ` AND slot >= ` + strconv.FormatUint(uint64(*slotBounds.StartSlot), 10)
 	}
 	if slotBounds.EndSlot != nil {
-		query = query + ` AND slot <= ` + strconv.FormatUint(*slotBounds.EndSlot, 10)
+		query = query + ` AND slot <= ` + strconv.FormatUint(uint64(*slotBounds.EndSlot), 10)
 	}
 	return query
 }

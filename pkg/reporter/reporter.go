@@ -232,7 +232,7 @@ func (reporter *Reporter) GetReputationScoreReport(ctx context.Context, slotBoun
 	return scoresReport, nil
 }
 
-func (reporter *Reporter) GetBidDeliveryScore(ctx context.Context, relay *types.Relay, slotBounds *types.SlotBounds, currentSlot uint64) (*types.Score, error) {
+func (reporter *Reporter) GetBidDeliveryScore(ctx context.Context, relay *types.Relay, slotBounds *types.SlotBounds, currentSlot types.Slot) (*types.Score, error) {
 	// First get the count of bids analyzed for the relay (this is equivalent to
 	// the number of bids that were delivered by the relay in the given time).
 	countBidsAnalyzed, err := reporter.GetCountTotalBids(ctx, relay, slotBounds)
@@ -254,7 +254,7 @@ func (reporter *Reporter) GetBidDeliveryScore(ctx context.Context, relay *types.
 	}, nil
 }
 
-func (reporter *Reporter) GetBidDeliveryScoreReport(ctx context.Context, slotBounds *types.SlotBounds, currentSlot uint64) (types.ScoreReport, error) {
+func (reporter *Reporter) GetBidDeliveryScoreReport(ctx context.Context, slotBounds *types.SlotBounds, currentSlot types.Slot) (types.ScoreReport, error) {
 	relays, err := reporter.store.GetRelays(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("could not get relays from DB: %v", err)

@@ -84,7 +84,7 @@ func (store *PostgresStore) Close() error {
 	return store.DB.Close()
 }
 
-func (store *PostgresStore) PutBid(ctx context.Context, bidCtx *types.BidContext, bid *types.Bid) error {
+func (store *PostgresStore) PutBid(ctx context.Context, bidCtx *types.BidContext, bid *types.VersionedBid) error {
 	// Convert into a format that works better with the DB.
 	bidEntry, err := types.BidWithContextToBidEntry(bidCtx, bid)
 	if err != nil {
@@ -96,12 +96,12 @@ func (store *PostgresStore) PutBid(ctx context.Context, bidCtx *types.BidContext
 	if err != nil {
 		return err
 	}
-	store.logger.Info("saved bid to db", zap.Uint64("slot", bidCtx.Slot), zap.String("parent_hash", bidCtx.ParentHash.String()))
+	store.logger.Info("saved bid to db", zap.Uint64("slot", uint64(bidCtx.Slot)), zap.String("parent_hash", bidCtx.ParentHash.String()))
 
 	return nil
 }
 
-func (store *PostgresStore) GetBid(ctx context.Context, bidCtx *types.BidContext) (*types.Bid, error) {
+func (store *PostgresStore) GetBid(ctx context.Context, bidCtx *types.BidContext) (*types.VersionedBid, error) {
 	// Fetch bid based on the "bid context".
 	query := `SELECT bid, signature
 	FROM ` + TableBids + `
@@ -112,12 +112,12 @@ func (store *PostgresStore) GetBid(ctx context.Context, bidCtx *types.BidContext
 	if err != nil {
 		return nil, err
 	}
-	store.logger.Info("fetched bid from db", zap.Uint64("slot", bidCtx.Slot), zap.String("parent_hash", bidCtx.ParentHash.String()))
+	store.logger.Info("fetched bid from db", zap.Uint64("slot", uint64(bidCtx.Slot)), zap.String("parent_hash", bidCtx.ParentHash.String()))
 
 	return types.BidEntryToBid(bidEntry)
 }
 
-func (store *PostgresStore) PutAcceptance(ctx context.Context, bidCtx *types.BidContext, acceptance *types.SignedBlindedBeaconBlock) error {
+func (store *PostgresStore) PutAcceptance(ctx context.Context, bidCtx *types.BidContext, acceptance *types.VersionedAcceptance) error {
 	// Convert into a format that works better with the DB.
 	acceptanceEntry, err := types.AcceptanceWithContextToAcceptanceEntry(bidCtx, acceptance)
 	if err != nil {
@@ -129,7 +129,7 @@ func (store *PostgresStore) PutAcceptance(ctx context.Context, bidCtx *types.Bid
 	if err != nil {
 		return err
 	}
-	store.logger.Info("saved acceptance to db", zap.Uint64("slot", bidCtx.Slot), zap.String("parent_hash", bidCtx.ParentHash.String()))
+	store.logger.Info("saved acceptance to db", zap.Uint64("slot", uint64(bidCtx.Slot)), zap.String("parent_hash", bidCtx.ParentHash.String()))
 
 	return nil
 }
@@ -159,7 +159,7 @@ func (store *PostgresStore) PutValidatorRegistration(ctx context.Context, regist
 	return nil
 }
 
-func (store *PostgresStore) GetValidatorRegistrations(ctx context.Context, publicKey *types.PublicKey) ([]*types.SignedValidatorRegistration, error) {
+func (store *PostgresStore) GetValidatorRegistrations(ctx context.Context, publicKey types.PublicKey) ([]*types.SignedValidatorRegistration, error) {
 	// Fetch all validator registrations for a given 'publicKey'.
 	query := `SELECT pubkey, fee_recipient, timestamp, gas_limit, signature
 	FROM ` + vars.TableValidatorRegistration + `
@@ -176,7 +176,7 @@ func (store *PostgresStore) GetValidatorRegistrations(ctx context.Context, publi
 	return types.ValidatorRegistrationEntriesToSignedValidatorRegistrations(entries)
 }
 
-func (store *PostgresStore) GetLatestValidatorRegistration(ctx context.Context, publicKey *types.PublicKey) (*types.SignedValidatorRegistration, error) {
+func (store *PostgresStore) GetLatestValidatorRegistration(ctx context.Context, publicKey types.PublicKey) (*types.SignedValidatorRegistration, error) {
 	// Fetch the latest registration for a given 'publicKey'.
 	query := `SELECT DISTINCT ON (pubkey) pubkey, fee_recipient, timestamp, gas_limit, signature
 	FROM ` + vars.TableValidatorRegistration + `
@@ -223,7 +223,7 @@ func (store *PostgresStore) PutBidAnalysis(ctx context.Context, bidCtx *types.Bi
 	if err != nil {
 		return err
 	}
-	store.logger.Info("saved analysis to db", zap.Uint64("slot", bidCtx.Slot), zap.String("parent_hash", bidCtx.ParentHash.String()))
+	store.logger.Info("saved analysis to db", zap.Uint64("slot", uint64(bidCtx.Slot)), zap.String("parent_hash", bidCtx.ParentHash.String()))
 
 	return nil
 }
@@ -303,7 +303,7 @@ func (store *PostgresStore) PutRelay(ctx context.Context, relay *types.Relay) er
 	return nil
 }
 
-func (store *PostgresStore) GetRelay(ctx context.Context, publicKey *types.PublicKey) (*types.Relay, error) {
+func (store *PostgresStore) GetRelay(ctx context.Context, publicKey types.PublicKey) (*types.Relay, error) {
 	query := `SELECT pubkey, hostname, endpoint FROM ` + TableRelays + ` WHERE pubkey=$1;`
 
 	entry := &types.RelayEntry{}

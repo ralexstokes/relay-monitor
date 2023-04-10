@@ -3,6 +3,7 @@ package analysis
 import (
 	"context"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
 	"github.com/ralexstokes/relay-monitor/pkg/crypto"
@@ -108,22 +109,43 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 	logger := a.logger.Sugar()
 
 	logger.Debugf("received transcript: %+v", event.Transcript)
-
 	transcript := event.Transcript
 
-	bid := transcript.Bid.Message
+	bid := &transcript.Bid
 	signedBlindedBeaconBlock := &transcript.Acceptance
-	blindedBeaconBlock := signedBlindedBeaconBlock.Message
 
 	// Verify signature first, to avoid doing unnecessary work in the event this is a "bad" transcript
-	proposerPublicKey, err := a.consensusClient.GetPublicKeyForIndex(ctx, blindedBeaconBlock.ProposerIndex)
+	proposerIndex, err := signedBlindedBeaconBlock.ProposerIndex()
+	if err != nil {
+		logger.Warnw("could not get proposer index from acceptance", "error", err)
+		return
+	}
+	proposerPublicKey, err := a.consensusClient.GetPublicKeyForIndex(ctx, proposerIndex)
 	if err != nil {
 		logger.Warnw("could not find public key for validator index", "error", err)
 		return
 	}
 
-	domain := a.consensusClient.SignatureDomain(blindedBeaconBlock.Slot)
-	valid, err := crypto.VerifySignature(signedBlindedBeaconBlock.Message, domain, proposerPublicKey[:], signedBlindedBeaconBlock.Signature[:])
+	slot, err := signedBlindedBeaconBlock.Slot()
+	if err != nil {
+		logger.Warnw("could not get slot from acceptance", "error", err)
+		return
+	}
+
+	message, err := signedBlindedBeaconBlock.Message()
+	if err != nil {
+		logger.Warnw("could not get message from acceptance", "error", err)
+		return
+	}
+
+	signature, err := signedBlindedBeaconBlock.Signature()
+	if err != nil {
+		logger.Warnw("could not get signature from acceptance", "error", err)
+		return
+	}
+
+	domain := a.consensusClient.SignatureDomain(slot)
+	valid, err := crypto.VerifySignature(message, domain, proposerPublicKey[:], signature[:])
 	if err != nil {
 		logger.Warnw("error verifying signature from proposer; could not determine authenticity of transcript", "error", err, "bid", bid, "acceptance", signedBlindedBeaconBlock)
 		return
@@ -133,11 +155,23 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 		return
 	}
 
+	// Get info needed for bid context.
+	bidPubkey, err := bid.Builder()
+	if err != nil {
+		logger.Warnw("could not get pubkey from bid", "error", err)
+		return
+	}
+	parentRoot, err := signedBlindedBeaconBlock.ParentRoot()
+	if err != nil {
+		logger.Warnw("could not get parent root from acceptance", "error", err)
+		return
+	}
+
 	bidCtx := &types.BidContext{
-		Slot:              blindedBeaconBlock.Slot,
-		ParentHash:        bid.Header.ParentHash,
+		Slot:              slot,
+		ParentHash:        phase0.Hash32(parentRoot),
 		ProposerPublicKey: *proposerPublicKey,
-		RelayPublicKey:    bid.Pubkey,
+		RelayPublicKey:    bidPubkey,
 	}
 	existingBid, err := a.store.GetBid(ctx, bidCtx)
 	if err != nil {

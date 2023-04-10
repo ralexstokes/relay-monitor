@@ -2,41 +2,465 @@ package types
 
 import (
 	"database/sql"
+	"fmt"
+	"strconv"
 	"time"
 
-	"github.com/flashbots/go-boost-utils/types"
+	"github.com/attestantio/go-builder-client/spec"
+	"github.com/attestantio/go-eth2-client/api"
+	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/holiman/uint256"
 )
 
 type (
-	Slot                        = uint64
+	Slot                        = phase0.Slot
 	Epoch                       = uint64
-	ForkVersion                 = types.ForkVersion
 	Uint256                     = uint256.Int
-	PublicKey                   = types.PublicKey
-	Hash                        = types.Hash
-	Bid                         = types.SignedBuilderBid
-	Root                        = types.Root
-	ValidatorIndex              = uint64
-	SignedValidatorRegistration = types.SignedValidatorRegistration
-	SignedBlindedBeaconBlock    = types.SignedBlindedBeaconBlock
+	ValidatorIndex              = phase0.ValidatorIndex
+	PublicKey                   = phase0.BLSPubKey
+	Hash                        = phase0.Hash32
+	Root                        = phase0.Root
+	SignedValidatorRegistration = boostTypes.SignedValidatorRegistration
+	SignedBlindedBeaconBlock    = api.VersionedSignedBlindedBeaconBlock
 )
+
+func SlotFromString(slotString string) (phase0.Slot, error) {
+	startSlotValue, err := strconv.ParseUint(slotString, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return phase0.Slot(startSlotValue), nil
+}
+
+func BLSPubKeyFromHexString(hexString string) (phase0.BLSPubKey, error) {
+	var publicKey boostTypes.PublicKey
+	err := publicKey.UnmarshalText([]byte(hexString))
+	if err != nil {
+		return phase0.BLSPubKey{}, err
+	}
+	return phase0.BLSPubKey(publicKey), nil
+}
+
+type VersionedAcceptance struct {
+	Block *api.VersionedSignedBlindedBeaconBlock
+}
+
+func (a *VersionedAcceptance) Slot() (phase0.Slot, error) {
+	if a == nil {
+		return 0, fmt.Errorf("nil struct")
+	}
+	if a.Block == nil {
+		return 0, fmt.Errorf("nil block")
+	}
+	return a.Block.Slot()
+}
+
+func (a *VersionedAcceptance) ParentRoot() (phase0.Root, error) {
+	if a == nil {
+		return phase0.Root{}, fmt.Errorf("nil struct")
+	}
+	if a.Block == nil {
+		return phase0.Root{}, fmt.Errorf("nil block")
+	}
+	return a.Block.ParentRoot()
+}
+
+func (a *VersionedAcceptance) Signature() (phase0.BLSSignature, error) {
+	if a == nil {
+		return phase0.BLSSignature{}, fmt.Errorf("nil struct")
+	}
+	if a.Block == nil {
+		return phase0.BLSSignature{}, fmt.Errorf("nil block")
+	}
+	switch a.Block.Version {
+	case consensusspec.DataVersionBellatrix:
+		if a.Block.Bellatrix == nil {
+			return phase0.BLSSignature{}, fmt.Errorf("no data")
+		}
+		return a.Block.Bellatrix.Signature, nil
+	case consensusspec.DataVersionCapella:
+		if a.Block.Capella == nil {
+			return phase0.BLSSignature{}, fmt.Errorf("no data")
+		}
+		return a.Block.Capella.Signature, nil
+	default:
+		return phase0.BLSSignature{}, fmt.Errorf("unsupported version")
+	}
+}
+
+func (a *VersionedAcceptance) ProposerIndex() (phase0.ValidatorIndex, error) {
+	if a == nil {
+		return 0, fmt.Errorf("nil struct")
+	}
+	if a.Block == nil {
+		return 0, fmt.Errorf("nil block")
+	}
+	switch a.Block.Version {
+	case consensusspec.DataVersionBellatrix:
+		if a.Block.Bellatrix == nil {
+			return 0, fmt.Errorf("no data")
+		}
+		if a.Block.Bellatrix.Message == nil {
+			return 0, fmt.Errorf("no message")
+		}
+		return a.Block.Bellatrix.Message.ProposerIndex, nil
+	case consensusspec.DataVersionCapella:
+		if a.Block.Capella == nil {
+			return 0, fmt.Errorf("no data")
+		}
+		if a.Block.Capella.Message == nil {
+			return 0, fmt.Errorf("no message")
+		}
+		return a.Block.Capella.Message.ProposerIndex, nil
+	default:
+		return 0, fmt.Errorf("unsupported version")
+	}
+}
+
+func (a *VersionedAcceptance) Message() (boostTypes.HashTreeRoot, error) {
+	if a == nil {
+		return nil, fmt.Errorf("nil struct")
+	}
+	if a.Block == nil {
+		return nil, fmt.Errorf("nil block")
+	}
+	switch a.Block.Version {
+	case consensusspec.DataVersionBellatrix:
+		if a.Block.Bellatrix == nil {
+			return nil, fmt.Errorf("no data")
+		}
+		return a.Block.Bellatrix.Message, nil
+	case consensusspec.DataVersionCapella:
+		if a.Block.Capella == nil {
+			return nil, fmt.Errorf("no data")
+		}
+		return a.Block.Capella.Message, nil
+	default:
+		return nil, fmt.Errorf("unsupported version")
+	}
+}
 
 type Coordinate struct {
 	Slot Slot
-	Root Root
+	Root phase0.Root
+}
+
+type VersionedBid struct {
+	Bid *spec.VersionedSignedBuilderBid
+}
+
+func (b *VersionedBid) Builder() (phase0.BLSPubKey, error) {
+	if b == nil {
+		return phase0.BLSPubKey{}, fmt.Errorf("nil struct")
+	}
+	if b.Bid == nil {
+		return phase0.BLSPubKey{}, fmt.Errorf("nil bid")
+	}
+	return b.Bid.Builder()
+}
+
+func (b *VersionedBid) Signature() (phase0.BLSSignature, error) {
+	if b == nil {
+		return phase0.BLSSignature{}, fmt.Errorf("nil struct")
+	}
+	if b.Bid == nil {
+		return phase0.BLSSignature{}, fmt.Errorf("nil bid")
+	}
+	return b.Bid.Signature()
+}
+
+func (b *VersionedBid) ParentHash() (phase0.Hash32, error) {
+	if b == nil {
+		return phase0.Hash32{}, fmt.Errorf("nil struct")
+	}
+	if b.Bid == nil {
+		return phase0.Hash32{}, fmt.Errorf("nil bid")
+	}
+	return b.Bid.ParentHash()
+}
+
+func (b *VersionedBid) FeeRecipient() (bellatrix.ExecutionAddress, error) {
+	if b == nil {
+		return bellatrix.ExecutionAddress{}, fmt.Errorf("nil struct")
+	}
+	if b.Bid == nil {
+		return bellatrix.ExecutionAddress{}, fmt.Errorf("nil bid")
+	}
+	return b.Bid.FeeRecipient()
+}
+
+func (b *VersionedBid) Value() (*uint256.Int, error) {
+	if b == nil {
+		return nil, fmt.Errorf("nil struct")
+	}
+	if b.Bid == nil {
+		return nil, fmt.Errorf("nil bid")
+	}
+	return b.Bid.Value()
+}
+
+func (b *VersionedBid) Timestamp() (uint64, error) {
+	if b == nil {
+		return 0, fmt.Errorf("nil struct")
+	}
+	if b.Bid == nil {
+		return 0, fmt.Errorf("nil bid")
+	}
+	return b.Bid.Timestamp()
+}
+
+func (b *VersionedBid) Message() (boostTypes.HashTreeRoot, error) {
+	if b == nil {
+		return nil, fmt.Errorf("nil struct")
+	}
+	if b.Bid == nil {
+		return nil, fmt.Errorf("nil bid")
+	}
+	switch b.Bid.Version {
+	case consensusspec.DataVersionBellatrix:
+		if b.Bid.Bellatrix == nil {
+			return nil, fmt.Errorf("no data")
+		}
+		if b.Bid.Bellatrix.Message == nil {
+			return nil, fmt.Errorf("no message")
+		}
+		return b.Bid.Bellatrix.Message, nil
+	case consensusspec.DataVersionCapella:
+		if b.Bid.Capella == nil {
+			return nil, fmt.Errorf("no data")
+		}
+		if b.Bid.Capella.Message == nil {
+			return nil, fmt.Errorf("no message")
+		}
+		return b.Bid.Capella.Message, nil
+	default:
+		return nil, fmt.Errorf("unsupported version")
+	}
+}
+
+func (b *VersionedBid) PrevRandao() (phase0.Hash32, error) {
+	if b == nil {
+		return phase0.Hash32{}, fmt.Errorf("nil struct")
+	}
+	if b.Bid == nil {
+		return phase0.Hash32{}, fmt.Errorf("nil bid")
+	}
+	switch b.Bid.Version {
+	case consensusspec.DataVersionBellatrix:
+		if b.Bid.Bellatrix == nil {
+			return phase0.Hash32{}, fmt.Errorf("no data")
+		}
+		if b.Bid.Bellatrix.Message == nil {
+			return phase0.Hash32{}, fmt.Errorf("no message")
+		}
+		if b.Bid.Bellatrix.Message.Header == nil {
+			return phase0.Hash32{}, fmt.Errorf("no header")
+		}
+		return b.Bid.Bellatrix.Message.Header.PrevRandao, nil
+	case consensusspec.DataVersionCapella:
+		if b.Bid.Capella == nil {
+			return phase0.Hash32{}, fmt.Errorf("no data")
+		}
+		if b.Bid.Capella.Message == nil {
+			return phase0.Hash32{}, fmt.Errorf("no message")
+		}
+		if b.Bid.Capella.Message.Header == nil {
+			return phase0.Hash32{}, fmt.Errorf("no header")
+		}
+		return b.Bid.Capella.Message.Header.PrevRandao, nil
+	default:
+		return phase0.Hash32{}, fmt.Errorf("unsupported version")
+	}
+}
+
+func (b *VersionedBid) BlockNumber() (uint64, error) {
+	if b == nil {
+		return 0, fmt.Errorf("nil struct")
+	}
+	if b.Bid == nil {
+		return 0, fmt.Errorf("nil bid")
+	}
+	switch b.Bid.Version {
+	case consensusspec.DataVersionBellatrix:
+		if b.Bid.Bellatrix == nil {
+			return 0, fmt.Errorf("no data")
+		}
+		if b.Bid.Bellatrix.Message == nil {
+			return 0, fmt.Errorf("no message")
+		}
+		if b.Bid.Bellatrix.Message.Header == nil {
+			return 0, fmt.Errorf("no header")
+		}
+		return b.Bid.Bellatrix.Message.Header.BlockNumber, nil
+	case consensusspec.DataVersionCapella:
+		if b.Bid.Capella == nil {
+			return 0, fmt.Errorf("no data")
+		}
+		if b.Bid.Capella.Message == nil {
+			return 0, fmt.Errorf("no message")
+		}
+		if b.Bid.Capella.Message.Header == nil {
+			return 0, fmt.Errorf("no header")
+		}
+		return b.Bid.Capella.Message.Header.BlockNumber, nil
+	default:
+		return 0, fmt.Errorf("unsupported version")
+	}
+}
+
+func (b *VersionedBid) BlockHash() (phase0.Hash32, error) {
+	if b == nil {
+		return phase0.Hash32{}, fmt.Errorf("nil struct")
+	}
+	if b.Bid == nil {
+		return phase0.Hash32{}, fmt.Errorf("nil bid")
+	}
+	switch b.Bid.Version {
+	case consensusspec.DataVersionBellatrix:
+		if b.Bid.Bellatrix == nil {
+			return phase0.Hash32{}, fmt.Errorf("no data")
+		}
+		if b.Bid.Bellatrix.Message == nil {
+			return phase0.Hash32{}, fmt.Errorf("no message")
+		}
+		if b.Bid.Bellatrix.Message.Header == nil {
+			return phase0.Hash32{}, fmt.Errorf("no header")
+		}
+		return b.Bid.Bellatrix.Message.Header.BlockHash, nil
+	case consensusspec.DataVersionCapella:
+		if b.Bid.Capella == nil {
+			return phase0.Hash32{}, fmt.Errorf("no data")
+		}
+		if b.Bid.Capella.Message == nil {
+			return phase0.Hash32{}, fmt.Errorf("no message")
+		}
+		if b.Bid.Capella.Message.Header == nil {
+			return phase0.Hash32{}, fmt.Errorf("no header")
+		}
+		return b.Bid.Capella.Message.Header.BlockHash, nil
+	default:
+		return phase0.Hash32{}, fmt.Errorf("unsupported version")
+	}
+}
+
+func (b *VersionedBid) GasUsed() (uint64, error) {
+	if b == nil {
+		return 0, fmt.Errorf("nil struct")
+	}
+	if b.Bid == nil {
+		return 0, fmt.Errorf("nil bid")
+	}
+	switch b.Bid.Version {
+	case consensusspec.DataVersionBellatrix:
+		if b.Bid.Bellatrix == nil {
+			return 0, fmt.Errorf("no data")
+		}
+		if b.Bid.Bellatrix.Message == nil {
+			return 0, fmt.Errorf("no message")
+		}
+		if b.Bid.Bellatrix.Message.Header == nil {
+			return 0, fmt.Errorf("no header")
+		}
+		return b.Bid.Bellatrix.Message.Header.GasUsed, nil
+	case consensusspec.DataVersionCapella:
+		if b.Bid.Capella == nil {
+			return 0, fmt.Errorf("no data")
+		}
+		if b.Bid.Capella.Message == nil {
+			return 0, fmt.Errorf("no message")
+		}
+		if b.Bid.Capella.Message.Header == nil {
+			return 0, fmt.Errorf("no header")
+		}
+		return b.Bid.Capella.Message.Header.GasUsed, nil
+	default:
+		return 0, fmt.Errorf("unsupported version")
+	}
+}
+
+func (b *VersionedBid) GasLimit() (uint64, error) {
+	if b == nil {
+		return 0, fmt.Errorf("nil struct")
+	}
+	if b.Bid == nil {
+		return 0, fmt.Errorf("nil bid")
+	}
+	switch b.Bid.Version {
+	case consensusspec.DataVersionBellatrix:
+		if b.Bid.Bellatrix == nil {
+			return 0, fmt.Errorf("no data")
+		}
+		if b.Bid.Bellatrix.Message == nil {
+			return 0, fmt.Errorf("no message")
+		}
+		if b.Bid.Bellatrix.Message.Header == nil {
+			return 0, fmt.Errorf("no header")
+		}
+		return b.Bid.Bellatrix.Message.Header.GasLimit, nil
+	case consensusspec.DataVersionCapella:
+		if b.Bid.Capella == nil {
+			return 0, fmt.Errorf("no data")
+		}
+		if b.Bid.Capella.Message == nil {
+			return 0, fmt.Errorf("no message")
+		}
+		if b.Bid.Capella.Message.Header == nil {
+			return 0, fmt.Errorf("no header")
+		}
+		return b.Bid.Capella.Message.Header.GasLimit, nil
+	default:
+		return 0, fmt.Errorf("unsupported version")
+	}
+}
+
+func (b *VersionedBid) BaseFeeForGas() ([32]byte, error) {
+	if b == nil {
+		return [32]byte{}, fmt.Errorf("nil struct")
+	}
+	if b.Bid == nil {
+		return [32]byte{}, fmt.Errorf("nil bid")
+	}
+	switch b.Bid.Version {
+	case consensusspec.DataVersionBellatrix:
+		if b.Bid.Bellatrix == nil {
+			return [32]byte{}, fmt.Errorf("no data")
+		}
+		if b.Bid.Bellatrix.Message == nil {
+			return [32]byte{}, fmt.Errorf("no message")
+		}
+		if b.Bid.Bellatrix.Message.Header == nil {
+			return [32]byte{}, fmt.Errorf("no header")
+		}
+		return b.Bid.Bellatrix.Message.Header.BaseFeePerGas, nil
+	case consensusspec.DataVersionCapella:
+		if b.Bid.Capella == nil {
+			return [32]byte{}, fmt.Errorf("no data")
+		}
+		if b.Bid.Capella.Message == nil {
+			return [32]byte{}, fmt.Errorf("no message")
+		}
+		if b.Bid.Capella.Message.Header == nil {
+			return [32]byte{}, fmt.Errorf("no header")
+		}
+		return b.Bid.Capella.Message.Header.BaseFeePerGas, nil
+	default:
+		return [32]byte{}, fmt.Errorf("unsupported version")
+	}
 }
 
 type AuctionTranscript struct {
-	Bid        Bid                            `json:"bid"`
-	Acceptance types.SignedBlindedBeaconBlock `json:"acceptance"`
+	Bid        VersionedBid        `json:"bid"`
+	Acceptance VersionedAcceptance `json:"acceptance"`
 }
 
 type BidContext struct {
-	Slot              Slot      `json:"slot"`
-	ParentHash        Hash      `json:"parent_hash"`
-	ProposerPublicKey PublicKey `json:"proposer_public_key"`
-	RelayPublicKey    PublicKey `json:"relay_public_key"`
+	Slot              Slot             `json:"slot"`
+	ParentHash        phase0.Hash32    `json:"parent_hash"`
+	ProposerPublicKey phase0.BLSPubKey `json:"proposer_public_key"`
+	RelayPublicKey    phase0.BLSPubKey `json:"relay_public_key"`
 }
 
 // Database types
@@ -142,15 +566,15 @@ type RelayEntry struct {
 }
 
 type Relay struct {
-	Pubkey   types.PublicKey
+	Pubkey   phase0.BLSPubKey
 	Hostname string
 	Endpoint string
 }
 
 type (
-	ScoreReport        = map[types.PublicKey]*Score
-	FaultStatsReport   = map[types.PublicKey]*FaultStats
-	FaultRecordsReport = map[types.PublicKey]*FaultRecords
+	ScoreReport        = map[phase0.BLSPubKey]*Score
+	FaultStatsReport   = map[phase0.BLSPubKey]*FaultStats
+	FaultRecordsReport = map[phase0.BLSPubKey]*FaultRecords
 )
 
 type Score struct {
@@ -201,6 +625,6 @@ type Meta struct {
 }
 
 type SlotBounds struct {
-	StartSlot *uint64 `json:"start_slot"`
-	EndSlot   *uint64 `json:"end_slot"`
+	StartSlot *Slot `json:"start_slot"`
+	EndSlot   *Slot `json:"end_slot"`
 }

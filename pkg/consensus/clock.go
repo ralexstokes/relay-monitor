@@ -22,7 +22,7 @@ func NewClock(genesisTime, secondsPerSlot, slotsPerEpoch uint64) *Clock {
 }
 
 func (c *Clock) SlotInSeconds(slot types.Slot) int64 {
-	return int64(slot*c.secondsPerSlot + c.genesisTime)
+	return int64(uint64(slot)*c.secondsPerSlot + c.genesisTime)
 }
 
 func (c *Clock) CurrentSlot(currentTime int64) types.Slot {
@@ -35,7 +35,7 @@ func (c *Clock) CurrentSlot(currentTime int64) types.Slot {
 }
 
 func (c *Clock) EpochForSlot(slot types.Slot) types.Epoch {
-	return slot / c.slotsPerEpoch
+	return uint64(slot) / c.slotsPerEpoch
 }
 
 func (c *Clock) TickSlots(ctx context.Context) chan types.Slot {
@@ -64,10 +64,10 @@ func (c *Clock) TickEpochs(ctx context.Context) chan types.Epoch {
 	go func() {
 		slots := c.TickSlots(ctx)
 		currentSlot := <-slots
-		currentEpoch := currentSlot / c.slotsPerEpoch
+		currentEpoch := uint64(currentSlot) / c.slotsPerEpoch
 		ch <- currentEpoch
 		for slot := range slots {
-			epoch := slot / c.slotsPerEpoch
+			epoch := uint64(slot) / c.slotsPerEpoch
 			if epoch > currentEpoch {
 				currentEpoch = epoch
 				ch <- currentEpoch

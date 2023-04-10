@@ -4,29 +4,30 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 )
 
 type MemoryStore struct {
-	bids          map[types.BidContext]*types.Bid
+	bids          map[types.BidContext]*types.VersionedBid
 	registrations map[types.PublicKey][]*types.SignedValidatorRegistration
-	acceptances   map[types.BidContext]types.SignedBlindedBeaconBlock
+	acceptances   map[types.BidContext]types.VersionedAcceptance
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		bids:          make(map[types.BidContext]*types.Bid),
+		bids:          make(map[types.BidContext]*types.VersionedBid),
 		registrations: make(map[types.PublicKey][]*types.SignedValidatorRegistration),
-		acceptances:   make(map[types.BidContext]types.SignedBlindedBeaconBlock),
+		acceptances:   make(map[types.BidContext]types.VersionedAcceptance),
 	}
 }
 
-func (s *MemoryStore) PutBid(ctx context.Context, bidCtx *types.BidContext, bid *types.Bid) error {
+func (s *MemoryStore) PutBid(ctx context.Context, bidCtx *types.BidContext, bid *types.VersionedBid) error {
 	s.bids[*bidCtx] = bid
 	return nil
 }
 
-func (s *MemoryStore) GetBid(ctx context.Context, bidCtx *types.BidContext) (*types.Bid, error) {
+func (s *MemoryStore) GetBid(ctx context.Context, bidCtx *types.BidContext) (*types.VersionedBid, error) {
 	bid, ok := s.bids[*bidCtx]
 	if !ok {
 		return nil, fmt.Errorf("could not find bid for %+v", bidCtx)
@@ -35,14 +36,14 @@ func (s *MemoryStore) GetBid(ctx context.Context, bidCtx *types.BidContext) (*ty
 }
 
 func (s *MemoryStore) PutValidatorRegistration(ctx context.Context, registration *types.SignedValidatorRegistration) error {
-	publicKey := registration.Message.Pubkey
+	publicKey := phase0.BLSPubKey(registration.Message.Pubkey)
 	registrations := s.registrations[publicKey]
 	registrations = append(registrations, registration)
 	s.registrations[publicKey] = registrations
 	return nil
 }
 
-func (s *MemoryStore) PutAcceptance(ctx context.Context, bidCtx *types.BidContext, acceptance *types.SignedBlindedBeaconBlock) error {
+func (s *MemoryStore) PutAcceptance(ctx context.Context, bidCtx *types.BidContext, acceptance *types.VersionedAcceptance) error {
 	s.acceptances[*bidCtx] = *acceptance
 	return nil
 }

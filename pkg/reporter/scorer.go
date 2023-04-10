@@ -37,7 +37,7 @@ func (scorer *Scorer) ComputeTimeWeightedScore(faultRecords []*types.Record) (fl
 	lambda := 0.1
 
 	// Consider only the most recent fault record.
-	t := scorer.clock.CurrentSlot(time.Now().Unix())
+	t := uint64(scorer.clock.CurrentSlot(time.Now().Unix()))
 	t_most_recent := faultRecords[0].Slot
 
 	return 100 * (1 - math.Exp(-lambda*(float64(t-t_most_recent)))), nil
@@ -50,8 +50,8 @@ func (scorer *Scorer) ComputeReputationScore(faultRecords []*types.Record) (floa
 }
 
 // ComputeBidDeliveryScore computes a score based on the number of bids delivered.
-func (scorer *Scorer) ComputeBidDeliveryScore(countBidsAnalyzed, currentSlot uint64, slotBounds *types.SlotBounds) (float64, error) {
-	var slotDiff uint64
+func (scorer *Scorer) ComputeBidDeliveryScore(countBidsAnalyzed uint64, currentSlot types.Slot, slotBounds *types.SlotBounds) (float64, error) {
+	var slotDiff types.Slot
 	if slotBounds.StartSlot == nil && slotBounds.EndSlot == nil {
 		slotDiff = currentSlot
 	} else if slotBounds.EndSlot == nil {

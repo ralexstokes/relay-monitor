@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	fb_types "github.com/flashbots/go-boost-utils/types"
 	"github.com/gorilla/mux"
 	"github.com/ralexstokes/relay-monitor/pkg/analysis"
@@ -148,7 +149,7 @@ func (s *Server) parseSlotBounds(q url.Values) (*types.SlotBounds, error) {
 	startSlotStr := q.Get("start")
 	var startSlot *types.Slot
 	if startSlotStr != "" {
-		startSlotValue, err := strconv.ParseUint(startSlotStr, 10, 64)
+		startSlotValue, err := types.SlotFromString(startSlotStr)
 		if err != nil {
 			s.logger.Errorw("error parsing query param for faults request", "err", err, "startSlot", startSlotStr)
 			return nil, err
@@ -158,7 +159,7 @@ func (s *Server) parseSlotBounds(q url.Values) (*types.SlotBounds, error) {
 	endSlotStr := q.Get("end")
 	var endSlot *types.Slot
 	if endSlotStr != "" {
-		endSlotValue, err := strconv.ParseUint(endSlotStr, 10, 64)
+		endSlotValue, err := types.SlotFromString(endSlotStr)
 		if err != nil {
 			s.logger.Errorw("error parsing query param for faults request", "err", err, "endSlot", endSlotStr)
 			return nil, err
@@ -170,7 +171,7 @@ func (s *Server) parseSlotBounds(q url.Values) (*types.SlotBounds, error) {
 	// current slot.
 	windowSlotStr := q.Get("window")
 	if windowSlotStr != "" {
-		windowSlot, err := strconv.ParseUint(windowSlotStr, 10, 64)
+		windowSlot, err := types.SlotFromString(windowSlotStr)
 		if err != nil {
 			s.logger.Errorw("error parsing query param for faults request", "err", err, "windowSlot", windowSlotStr)
 			return nil, err
@@ -246,7 +247,7 @@ func (s *Server) handleReputationScoreRequest(w http.ResponseWriter, r *http.Req
 	}
 
 	// Find the relay.
-	relay, err := s.store.GetRelay(context.Background(), &pubkey)
+	relay, err := s.store.GetRelay(context.Background(), phase0.BLSPubKey(pubkey))
 	if err != nil {
 		s.logger.Errorw("error getting relay", "err", err)
 		s.respondError(w, http.StatusInternalServerError, err.Error())
@@ -316,7 +317,7 @@ func (s *Server) handleBidDeliveryScoreRequest(w http.ResponseWriter, r *http.Re
 	}
 
 	// Find the relay.
-	relay, err := s.store.GetRelay(context.Background(), &pubkey)
+	relay, err := s.store.GetRelay(context.Background(), phase0.BLSPubKey(pubkey))
 	if err != nil {
 		s.logger.Errorw("error getting relay", "err", err)
 		s.respondError(w, http.StatusInternalServerError, err.Error())
@@ -409,7 +410,7 @@ func (s *Server) handleFaultRecordsRequest(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Find the relay.
-	relay, err := s.store.GetRelay(context.Background(), &pubkey)
+	relay, err := s.store.GetRelay(context.Background(), phase0.BLSPubKey(pubkey))
 	if err != nil {
 		s.logger.Errorw("error getting relay", "err", err)
 		s.respondError(w, http.StatusInternalServerError, err.Error())
@@ -456,7 +457,7 @@ func (s *Server) handleFaultStatsRequest(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Find the relay.
-	relay, err := s.store.GetRelay(context.Background(), &pubkey)
+	relay, err := s.store.GetRelay(context.Background(), phase0.BLSPubKey(pubkey))
 	if err != nil {
 		s.logger.Errorw("error getting relay", "err", err)
 		s.respondError(w, http.StatusInternalServerError, err.Error())
@@ -508,7 +509,7 @@ func (s *Server) validateRegistrationSignature(registration *types.SignedValidat
 
 func (s *Server) validateRegistrationValidatorStatus(registration *types.SignedValidatorRegistration) error {
 	publicKey := registration.Message.Pubkey
-	status, err := s.consensusClient.GetValidatorStatus(&publicKey)
+	status, err := s.consensusClient.GetValidatorStatus(phase0.BLSPubKey(publicKey))
 	if err != nil {
 		return err
 	}
@@ -608,7 +609,7 @@ func (s *Server) handleRegisterValidator(w http.ResponseWriter, r *http.Request)
 	}
 
 	for _, registration := range registrations {
-		currentRegistration, err := s.store.GetLatestValidatorRegistration(ctx, &registration.Message.Pubkey)
+		currentRegistration, err := s.store.GetLatestValidatorRegistration(ctx, phase0.BLSPubKey(registration.Message.Pubkey))
 		if err != nil {
 			s.logger.Warnw("could not get registrations for validator", "error", err, "registration", registration)
 			s.respondError(w, http.StatusInternalServerError, err.Error())

@@ -22,8 +22,8 @@ var (
 func TestCanComputeDomain(t *testing.T) {
 	genesisForkVersion := [4]byte{}
 	binary.BigEndian.PutUint32(genesisForkVersion[0:4], sepoliaGenesisForkVersionAsNumber)
-	domain := boostTypes.ComputeDomain(boostTypes.DomainTypeAppBuilder, genesisForkVersion, types.Root{})
-	correctDomain := boostTypes.ComputeDomain(boostTypes.DomainTypeAppBuilder, sepoliaGenesisForkVersion, types.Root{})
+	domain := boostTypes.ComputeDomain(boostTypes.DomainTypeAppBuilder, genesisForkVersion, boostTypes.Root{})
+	correctDomain := boostTypes.ComputeDomain(boostTypes.DomainTypeAppBuilder, sepoliaGenesisForkVersion, boostTypes.Root{})
 	if domain != correctDomain {
 		t.Fatal("could not compute correct domain")
 	}
@@ -38,7 +38,7 @@ func TestSignatureVerification(t *testing.T) {
 
 	genesisForkVersion := [4]byte{}
 	binary.BigEndian.PutUint32(genesisForkVersion[0:4], sepoliaGenesisForkVersionAsNumber)
-	domain := boostTypes.ComputeDomain(boostTypes.DomainTypeAppBuilder, genesisForkVersion, types.Root{})
+	domain := boostTypes.ComputeDomain(boostTypes.DomainTypeAppBuilder, genesisForkVersion, boostTypes.Root{})
 
 	valid, err := crypto.VerifySignature(registration.Message, domain, registration.Message.Pubkey[:], registration.Signature[:])
 	if err != nil {

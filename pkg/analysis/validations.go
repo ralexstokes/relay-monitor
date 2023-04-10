@@ -6,12 +6,19 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/ralexstokes/relay-monitor/pkg/crypto"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
+	"go.uber.org/zap"
 )
 
 // validatePublicKey validates the public key of a bid to make sure it matches the relay public key
 // specified by the bid context.
-func (a *Analyzer) validatePublicKey(ctx context.Context, bidCtx *types.BidContext, bid *types.Bid) (*types.InvalidBid, error) {
-	if bidCtx.RelayPublicKey != bid.Message.Pubkey {
+func (a *Analyzer) validatePublicKey(ctx context.Context, bidCtx *types.BidContext, bid *types.VersionedBid) (*types.InvalidBid, error) {
+	bidPublicKey, err := bid.Builder()
+	if err != nil {
+		a.logger.Error("Failed to get bid public key", zap.Error(err))
+		return nil, err
+	}
+
+	if bidCtx.RelayPublicKey != bidPublicKey {
 		return &types.InvalidBid{
 			Category: types.InvalidBidPublicKeyCategory,
 			Reason:   types.AnalysisReasonIncorrectPublicKey,
@@ -23,8 +30,17 @@ func (a *Analyzer) validatePublicKey(ctx context.Context, bidCtx *types.BidConte
 
 // validateSignature verifies the signature of the bid message using the bid's public key and the
 // signature domain for the bid builder.
-func (a *Analyzer) validateSignature(ctx context.Context, bidCtx *types.BidContext, bid *types.Bid) (*types.InvalidBid, error) {
-	validSignature, err := crypto.VerifySignature(bid.Message, a.consensusClient.SignatureDomainForBuilder(), bidCtx.RelayPublicKey[:], bid.Signature[:])
+func (a *Analyzer) validateSignature(ctx context.Context, bidCtx *types.BidContext, bid *types.VersionedBid) (*types.InvalidBid, error) {
+	bidMsg, err := bid.Message()
+	if err != nil {
+		return nil, err
+	}
+
+	bidSignature, err := bid.Signature()
+	if err != nil {
+		return nil, err
+	}
+	validSignature, err := crypto.VerifySignature(bidMsg, a.consensusClient.SignatureDomainForBuilder(), bidCtx.RelayPublicKey[:], bidSignature[:])
 	if err != nil {
 		return nil, err
 	}
@@ -43,11 +59,14 @@ func (a *Analyzer) validateSignature(ctx context.Context, bidCtx *types.BidConte
 // block number, gas used, timestamp, and base fee, to ensure that the bid is consistent with
 // the consensus rules. If any of the validations fail, it returns an InvalidBid with a
 // category of InvalidBidConsensusCategory and a reason corresponding to the validation that failed.
-func (a *Analyzer) validateHeader(ctx context.Context, bidCtx *types.BidContext, bid *types.Bid) (*types.InvalidBid, error) {
-	header := bid.Message.Header
+func (a *Analyzer) validateHeader(ctx context.Context, bidCtx *types.BidContext, bid *types.VersionedBid) (*types.InvalidBid, error) {
+	bidParentHash, err := bid.ParentHash()
+	if err != nil {
+		return nil, err
+	}
 
 	// Validate the hash itself.
-	if bidCtx.ParentHash != header.ParentHash {
+	if bidCtx.ParentHash != bidParentHash {
 		return &types.InvalidBid{
 			Category: types.InvalidBidConsensusCategory,
 			Reason:   types.AnalysisReasonInvalidParentHash,
@@ -59,7 +78,11 @@ func (a *Analyzer) validateHeader(ctx context.Context, bidCtx *types.BidContext,
 	if err != nil {
 		return nil, err
 	}
-	if expectedRandomness != header.Random {
+	bidRandom, err := bid.PrevRandao()
+	if err != nil {
+		return nil, err
+	}
+	if expectedRandomness != bidRandom {
 		return &types.InvalidBid{
 			Category: types.InvalidBidConsensusCategory,
 			Reason:   types.AnalysisReasonInvalidRandomValue,
@@ -71,7 +94,12 @@ func (a *Analyzer) validateHeader(ctx context.Context, bidCtx *types.BidContext,
 	if err != nil {
 		return nil, err
 	}
-	if expectedBlockNumber != header.BlockNumber {
+
+	bidBlockNumber, err := bid.BlockNumber()
+	if err != nil {
+		return nil, err
+	}
+	if expectedBlockNumber != bidBlockNumber {
 		return &types.InvalidBid{
 			Category: types.InvalidBidConsensusCategory,
 			Reason:   types.AnalysisReasonInvalidBlockNumber,
@@ -79,7 +107,16 @@ func (a *Analyzer) validateHeader(ctx context.Context, bidCtx *types.BidContext,
 	}
 
 	// Verify that the bid gas used is less than the gas limit.
-	if header.GasUsed > header.GasLimit {
+	bidGasUsed, err := bid.GasUsed()
+	if err != nil {
+		return nil, err
+	}
+	bidGasLimit, err := bid.GasLimit()
+	if err != nil {
+		return nil, err
+	}
+
+	if bidGasUsed > bidGasLimit {
 		return &types.InvalidBid{
 			Category: types.InvalidBidConsensusCategory,
 			Reason:   types.AnalysisReasonInvalidGasUsed,
@@ -87,8 +124,13 @@ func (a *Analyzer) validateHeader(ctx context.Context, bidCtx *types.BidContext,
 	}
 
 	// Verify the timestamp.
+	bidTimestamp, err := bid.Timestamp()
+	if err != nil {
+		return nil, err
+	}
+
 	expectedTimestamp := a.clock.SlotInSeconds(bidCtx.Slot)
-	if expectedTimestamp != int64(header.Timestamp) {
+	if expectedTimestamp != int64(bidTimestamp) {
 		return &types.InvalidBid{
 			Category: types.InvalidBidConsensusCategory,
 			Reason:   types.AnalysisReasonInvalidTimestamp,
@@ -96,12 +138,17 @@ func (a *Analyzer) validateHeader(ctx context.Context, bidCtx *types.BidContext,
 	}
 
 	// Verify the base fee.
+	bidBaseFeeForGas, err := bid.BaseFeeForGas()
+	if err != nil {
+		return nil, err
+	}
+
 	expectedBaseFee, err := a.consensusClient.GetBaseFeeForProposal(bidCtx.Slot)
 	if err != nil {
 		return nil, err
 	}
 	baseFee := uint256.NewInt(0)
-	baseFee.SetBytes(reverse(header.BaseFeePerGas[:]))
+	baseFee.SetBytes(reverse(bidBaseFeeForGas[:]))
 	if !expectedBaseFee.Eq(baseFee) {
 		return &types.InvalidBid{
 			Category: types.InvalidBidConsensusCategory,
@@ -137,12 +184,10 @@ func (a *Analyzer) validateGasLimit(ctx context.Context, gasLimit, gasLimitPrefe
 // with the validator preferences. If any of the validations fail, it returns an InvalidBid with a
 // category of InvalidBidIgnoredPreferencesCategory and a reason corresponding to the validation
 // that failed.
-func (a *Analyzer) validateValidatorPrefence(ctx context.Context, bidCtx *types.BidContext, bid *types.Bid) (*types.InvalidBid, error) {
+func (a *Analyzer) validateValidatorPrefence(ctx context.Context, bidCtx *types.BidContext, bid *types.VersionedBid) (*types.InvalidBid, error) {
 	logger := a.logger.Sugar()
 
-	header := bid.Message.Header
-
-	registration, err := a.store.GetLatestValidatorRegistration(ctx, &bidCtx.ProposerPublicKey)
+	registration, err := a.store.GetLatestValidatorRegistration(ctx, bidCtx.ProposerPublicKey)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +195,13 @@ func (a *Analyzer) validateValidatorPrefence(ctx context.Context, bidCtx *types.
 	// Only validate if there is a registration.
 	if registration != nil {
 		// Validate the fee recipient.
-		if registration.Message.FeeRecipient != header.FeeRecipient {
+
+		bidFeeRecipient, err := bid.FeeRecipient()
+		if err != nil {
+			return nil, err
+		}
+
+		if registration.Message.FeeRecipient.String() != bidFeeRecipient.String() {
 			return &types.InvalidBid{
 				Reason:   types.AnalysisReasonIgnoredValidatorPreferenceFeeRecipient,
 				Category: types.InvalidBidIgnoredPreferencesCategory,
@@ -160,10 +211,19 @@ func (a *Analyzer) validateValidatorPrefence(ctx context.Context, bidCtx *types.
 		// Validate the gas limit preference.
 		gasLimitPreference := registration.Message.GasLimit
 
+		bidGasLimit, err := bid.GasLimit()
+		if err != nil {
+			return nil, err
+		}
+		bidBlockNumber, err := bid.BlockNumber()
+		if err != nil {
+			return nil, err
+		}
+
 		// NOTE: need transaction set for possibility of payment transaction
 		// so we defer analysis of fee recipient until we have the full payload
 
-		valid, err := a.validateGasLimit(ctx, header.GasLimit, gasLimitPreference, header.BlockNumber)
+		valid, err := a.validateGasLimit(ctx, bidGasLimit, gasLimitPreference, bidBlockNumber)
 		if err != nil {
 			return nil, err
 		}
@@ -182,7 +242,7 @@ func (a *Analyzer) validateValidatorPrefence(ctx context.Context, bidCtx *types.
 
 // validateBid performs multiple validations on a bid message to ensure that it is valid w.r.t
 // consensus and respects validator preferences.
-func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bid *types.Bid) (*types.InvalidBid, error) {
+func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bid *types.VersionedBid) (*types.InvalidBid, error) {
 	if bid == nil {
 		return nil, nil
 	}
