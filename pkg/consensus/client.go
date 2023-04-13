@@ -310,15 +310,26 @@ func (c *Client) FetchProposers(ctx context.Context, epoch types.Epoch) error {
 	return nil
 }
 
+func (c *Client) FetchBlockRequest(ctx context.Context, slot types.Slot, dest *eth2api.VersionedSignedBeaconBlock) (bool, error) {
+	blockID := eth2api.BlockIdSlot(slot)
+	exists, err := beaconapi.BlockV2(ctx, c.client, blockID, dest)
+	return exists, err
+}
+
 func (c *Client) FetchBlock(ctx context.Context, slot types.Slot) error {
 	// TODO handle reorgs, etc.
-	blockID := eth2api.BlockIdSlot(slot)
-
 	var signedBeaconBlock eth2api.VersionedSignedBeaconBlock
-	exists, err := beaconapi.BlockV2(ctx, c.client, blockID, &signedBeaconBlock)
+	exists, err := c.FetchBlockRequest(ctx, slot, &signedBeaconBlock)
 	// NOTE: need to check `exists` first...
 	if !exists {
-		return nil
+		// Try 3 previous slots
+		for i := 1; i < 4; i++ {
+			targetSlot := slot - uint64(i)
+			exists, err := c.FetchBlockRequest(ctx, targetSlot, &signedBeaconBlock)
+			if exists && err == nil {
+				break
+			}
+		}
 	} else if err != nil {
 		return err
 	}
