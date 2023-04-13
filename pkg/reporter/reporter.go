@@ -29,21 +29,21 @@ func NewReporter(store store.Storer, scorer *Scorer, logger *zap.SugaredLogger) 
 ///
 
 func (reporter *Reporter) GetAllInvalidBids(ctx context.Context, relay *types.Relay, slotBounds *types.SlotBounds) ([]*types.Record, error) {
-	return reporter.store.GetRecordsAnalysisWithinSlotBounds(ctx, relay.Pubkey.String(), slotBounds, &types.AnalysisQueryFilter{
+	return reporter.store.GetRecordsAnalysisWithinSlotBounds(ctx, relay.Pubkey, slotBounds, &types.AnalysisQueryFilter{
 		Category:   types.ValidBidCategory,
 		Comparator: "!=",
 	})
 }
 
 func (reporter *Reporter) GetIgnoredPreferencesBids(ctx context.Context, relay *types.Relay, slotBounds *types.SlotBounds) ([]*types.Record, error) {
-	return reporter.store.GetRecordsAnalysisWithinSlotBounds(ctx, relay.Pubkey.String(), slotBounds, &types.AnalysisQueryFilter{
+	return reporter.store.GetRecordsAnalysisWithinSlotBounds(ctx, relay.Pubkey, slotBounds, &types.AnalysisQueryFilter{
 		Category:   types.InvalidBidIgnoredPreferencesCategory,
 		Comparator: "=",
 	})
 }
 
 func (reporter *Reporter) GetConsensusInvalidBids(ctx context.Context, relay *types.Relay, slotBounds *types.SlotBounds) ([]*types.Record, error) {
-	return reporter.store.GetRecordsAnalysisWithinSlotBounds(ctx, relay.Pubkey.String(), slotBounds, &types.AnalysisQueryFilter{
+	return reporter.store.GetRecordsAnalysisWithinSlotBounds(ctx, relay.Pubkey, slotBounds, &types.AnalysisQueryFilter{
 		Category:   types.InvalidBidConsensusCategory,
 		Comparator: "=",
 	})
@@ -54,28 +54,28 @@ func (reporter *Reporter) GetConsensusInvalidBids(ctx context.Context, relay *ty
 ///
 
 func (reporter *Reporter) GetCountIgnoredPreferencesBids(ctx context.Context, relay *types.Relay, slotBounds *types.SlotBounds) (uint64, error) {
-	return reporter.store.GetCountAnalysisWithinSlotBounds(ctx, relay.Pubkey.String(), slotBounds, &types.AnalysisQueryFilter{
+	return reporter.store.GetCountAnalysisWithinSlotBounds(ctx, relay.Pubkey, slotBounds, &types.AnalysisQueryFilter{
 		Category:   types.InvalidBidIgnoredPreferencesCategory,
 		Comparator: "=",
 	})
 }
 
 func (reporter *Reporter) GetCountConsensusInvalidBids(ctx context.Context, relay *types.Relay, slotBounds *types.SlotBounds) (uint64, error) {
-	return reporter.store.GetCountAnalysisWithinSlotBounds(ctx, relay.Pubkey.String(), slotBounds, &types.AnalysisQueryFilter{
+	return reporter.store.GetCountAnalysisWithinSlotBounds(ctx, relay.Pubkey, slotBounds, &types.AnalysisQueryFilter{
 		Category:   types.InvalidBidConsensusCategory,
 		Comparator: "=",
 	})
 }
 
 func (reporter *Reporter) GetCountTotalValidBids(ctx context.Context, relay *types.Relay, slotBounds *types.SlotBounds) (uint64, error) {
-	return reporter.store.GetCountAnalysisWithinSlotBounds(ctx, relay.Pubkey.String(), slotBounds, &types.AnalysisQueryFilter{
+	return reporter.store.GetCountAnalysisWithinSlotBounds(ctx, relay.Pubkey, slotBounds, &types.AnalysisQueryFilter{
 		Category:   types.ValidBidCategory,
 		Comparator: "=",
 	})
 }
 
 func (reporter *Reporter) GetCountTotalBids(ctx context.Context, relay *types.Relay, slotBounds *types.SlotBounds) (uint64, error) {
-	return reporter.store.GetCountAnalysisWithinSlotBounds(ctx, relay.Pubkey.String(), slotBounds, nil)
+	return reporter.store.GetCountAnalysisWithinSlotBounds(ctx, relay.Pubkey, slotBounds, nil)
 }
 
 ///
@@ -165,7 +165,7 @@ func (reporter *Reporter) GetFaultStatsReport(ctx context.Context, slotBounds *t
 			reporter.logger.Warnf("could not get fault stats for relay %s: %v", relay.Pubkey, err)
 			continue
 		}
-		faultStatsReport[relay.Pubkey.String()] = faultStats
+		faultStatsReport[relay.Pubkey] = faultStats
 	}
 	return faultStatsReport, nil
 }
@@ -183,7 +183,7 @@ func (reporter *Reporter) GetFaultRecordsReport(ctx context.Context, slotBounds 
 			reporter.logger.Warnf("could not get fault records for relay %s: %v", relay.Pubkey, err)
 			continue
 		}
-		faultRecordsReport[relay.Pubkey.String()] = faultRecords
+		faultRecordsReport[relay.Pubkey] = faultRecords
 	}
 	return faultRecordsReport, nil
 }
@@ -227,7 +227,7 @@ func (reporter *Reporter) GetReputationScoreReport(ctx context.Context, slotBoun
 			reporter.logger.Warnf("could not get score for relay %s: %v", relay.Pubkey, err)
 			continue
 		}
-		scoresReport[relay.Pubkey.String()] = score
+		scoresReport[relay.Pubkey] = score
 	}
 	return scoresReport, nil
 }
@@ -267,7 +267,7 @@ func (reporter *Reporter) GetBidDeliveryScoreReport(ctx context.Context, slotBou
 			reporter.logger.Warnf("could not get score for relay %s: %v", relay.Pubkey, err)
 			continue
 		}
-		scoresReport[relay.Pubkey.String()] = score
+		scoresReport[relay.Pubkey] = score
 	}
 	return scoresReport, nil
 }

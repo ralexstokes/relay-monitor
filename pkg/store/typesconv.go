@@ -159,7 +159,7 @@ func InvalidBidToAnalysisEntry(bidCtx *types.BidContext, invalidBid *types.Inval
 // RelayToRelayEntry converts a relay struct to a relay entry.
 func RelayToRelayEntry(relay *types.Relay) (*RelayEntry, error) {
 	return &RelayEntry{
-		Pubkey:   relay.Pubkey.String(),
+		Pubkey:   relay.Pubkey,
 		Hostname: relay.Hostname,
 		Endpoint: relay.Endpoint,
 	}, nil
@@ -173,7 +173,7 @@ func RelayEntryToRelay(relayEntry *RelayEntry) (*types.Relay, error) {
 	}
 
 	return &types.Relay{
-		Pubkey:   pubkey,
+		Pubkey:   pubkey.String(),
 		Hostname: relayEntry.Hostname,
 		Endpoint: relayEntry.Endpoint,
 	}, nil

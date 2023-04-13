@@ -493,7 +493,7 @@ type BidContext struct {
 }
 
 type Relay struct {
-	Pubkey   phase0.BLSPubKey
+	Pubkey   string
 	Hostname string
 	Endpoint string
 }
@@ -541,10 +541,10 @@ type Stats struct {
 	ConsensusInvalidBids   uint64 `json:"consensus_invalid_bids"`
 	IgnoredPreferencesBids uint64 `json:"ignored_preferences_bids"`
 
-	PaymentInvalidBids       uint `json:"payment_invalid_bids"`
-	MalformedPayloads        uint `json:"malformed_payloads"`
-	ConsensusInvalidPayloads uint `json:"consensus_invalid_payloads"`
-	UnavailablePayloads      uint `json:"unavailable_payloads"`
+	PaymentInvalidBids       uint64 `json:"payment_invalid_bids"`
+	MalformedPayloads        uint64 `json:"malformed_payloads"`
+	ConsensusInvalidPayloads uint64 `json:"consensus_invalid_payloads"`
+	UnavailablePayloads      uint64 `json:"unavailable_payloads"`
 }
 
 type Meta struct {

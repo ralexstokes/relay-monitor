@@ -42,7 +42,7 @@ func parseRelaysFromEndpoint(ctx context.Context, store *store.PostgresStore, re
 
 		// Save relay to DB if it doesn't exist.
 		err = store.PutRelay(ctx, &types.Relay{
-			Pubkey:   relay.PublicKey,
+			Pubkey:   relay.PublicKey.String(),
 			Hostname: relay.Hostname(),
 			Endpoint: relay.Endpoint(),
 		})
