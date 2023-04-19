@@ -71,7 +71,7 @@ func main() {
 	clock := consensus.NewClock(consensusClient.GenesisTime, consensusClient.SecondsPerSlot, consensusClient.SlotsPerEpoch)
 
 	// Create the reporter.
-	reporter := reporter.NewReporter(store, reporter.NewScorer(clock, logger), logger)
+	reporter := reporter.NewReporter(store, reporter.NewScorer(logger), logger)
 
 	websiteListenAddr := fmt.Sprintf("%s:%d", config.Website.Host, config.Website.Port)
 

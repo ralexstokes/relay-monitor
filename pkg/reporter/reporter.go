@@ -192,7 +192,7 @@ func (reporter *Reporter) GetFaultRecordsReport(ctx context.Context, slotBounds 
 /// Scoring
 ///
 
-func (reporter *Reporter) GetReputationScore(ctx context.Context, relay *types.Relay, slotBounds *types.SlotBounds) (*types.Score, error) {
+func (reporter *Reporter) GetReputationScore(ctx context.Context, relay *types.Relay, slotBounds *types.SlotBounds, currentSlot types.Slot) (*types.Score, error) {
 	// Get a list of all invlaid bids for the relay. Every invalid bid is
 	// returned as a record.
 	invalidBids, err := reporter.GetAllInvalidBids(ctx, relay, slotBounds)
@@ -201,7 +201,7 @@ func (reporter *Reporter) GetReputationScore(ctx context.Context, relay *types.R
 	}
 
 	// Process the list of invalid bids (records) and compute the score.
-	score, err := reporter.scorer.ComputeReputationScore(invalidBids)
+	score, err := reporter.scorer.ComputeReputationScore(invalidBids, currentSlot)
 	if err != nil {
 		return nil, fmt.Errorf("could not calculate score: %v", err)
 	}
@@ -214,7 +214,7 @@ func (reporter *Reporter) GetReputationScore(ctx context.Context, relay *types.R
 	}, nil
 }
 
-func (reporter *Reporter) GetReputationScoreReport(ctx context.Context, slotBounds *types.SlotBounds) (types.ScoreReport, error) {
+func (reporter *Reporter) GetReputationScoreReport(ctx context.Context, slotBounds *types.SlotBounds, currentSlot types.Slot) (types.ScoreReport, error) {
 	relays, err := reporter.store.GetRelays(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("could not get relays from DB: %v", err)
@@ -222,7 +222,7 @@ func (reporter *Reporter) GetReputationScoreReport(ctx context.Context, slotBoun
 
 	scoresReport := make(types.ScoreReport)
 	for _, relay := range relays {
-		score, err := reporter.GetReputationScore(ctx, relay, slotBounds)
+		score, err := reporter.GetReputationScore(ctx, relay, slotBounds, currentSlot)
 		if err != nil {
 			reporter.logger.Warnf("could not get score for relay %s: %v", relay.Pubkey, err)
 			continue

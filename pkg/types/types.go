@@ -25,6 +25,11 @@ type (
 	SignedBlindedBeaconBlock    = api.VersionedSignedBlindedBeaconBlock
 )
 
+func SlotPtr(slot uint64) *Slot {
+	s := phase0.Slot(slot)
+	return &s
+}
+
 // SlotFromString converts a slot string in base 10 to a slot.
 func SlotFromString(slotString string) (phase0.Slot, error) {
 	startSlotValue, err := strconv.ParseUint(slotString, 10, 64)

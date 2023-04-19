@@ -56,7 +56,7 @@ func New(config *Config, logger *zap.Logger, analyzer *analysis.Analyzer, events
 		events:          events,
 		clock:           clock,
 		store:           store,
-		reporter:        reporter.NewReporter(store, reporter.NewScorer(clock, logger.Sugar()), logger.Sugar()),
+		reporter:        reporter.NewReporter(store, reporter.NewScorer(logger.Sugar()), logger.Sugar()),
 		consensusClient: consensusClient,
 	}
 }
@@ -206,7 +206,7 @@ func (s *Server) handleReputationScoresRequest(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	scoreReport, err := s.reporter.GetReputationScoreReport(context.Background(), slotBounds)
+	scoreReport, err := s.reporter.GetReputationScoreReport(context.Background(), slotBounds, s.currentSlot())
 	if err != nil {
 		s.logger.Errorw("error getting scores", "err", err)
 		s.respondError(w, http.StatusInternalServerError, err.Error())
@@ -253,7 +253,7 @@ func (s *Server) handleReputationScoreRequest(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	score, err := s.reporter.GetReputationScore(context.Background(), relay, slotBounds)
+	score, err := s.reporter.GetReputationScore(context.Background(), relay, slotBounds, s.currentSlot())
 	if err != nil {
 		s.logger.Errorw("error getting score", "err", err)
 		s.respondError(w, http.StatusInternalServerError, err.Error())

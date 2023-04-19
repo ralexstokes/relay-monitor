@@ -9,4 +9,4 @@ api:
   host: "localhost"
   port: 8080
 store:
-  dsn: "postgresql://localhost:5432?sslmode=disable"
+  dsn: "postgresql://localhost:5432/rm_sepolia?sslmode=disable"

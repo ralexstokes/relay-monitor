@@ -238,7 +238,7 @@ func (srv *Webserver) updateHTML() {
 	}
 
 	// Fetch score reports.
-	_reputationScoreReport, err := srv.reporter.GetReputationScoreReport(context.Background(), slotBounds)
+	_reputationScoreReport, err := srv.reporter.GetReputationScoreReport(context.Background(), slotBounds, _currentSlot)
 	if err != nil {
 		srv.log.Error("error getting reputation score report")
 	}
