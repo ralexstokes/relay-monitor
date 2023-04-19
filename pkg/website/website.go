@@ -265,7 +265,7 @@ func (srv *Webserver) updateHTML() {
 
 	// default view
 	if err := srv.indexTemplate.Execute(&htmlDefault, srv.statusHTMLData); err != nil {
-		srv.log.Error("error rendering template")
+		srv.log.Error("error rendering template", zap.Error(err))
 	}
 
 	// Minify

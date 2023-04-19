@@ -276,6 +276,7 @@
                     </tr>
                 </thead>
                 <tbody>
+                    {{$linkBeaconchain := .linkBeaconchain}}
                     {{ range .records }}
                     <tr>
                         <td>{{.Slot | prettyInt}}</td>
@@ -283,8 +284,8 @@
                         <td>{{.ProposerPubkey }}</td>
                         <td>
                             <div class="icons-container">
-                                {{ if ne .linkBeaconchain "" }}
-                                <a class="img-beaconchain" href="{{.linkBeaconchain}}/slot/{{.Slot}}" target="_blank"
+                                {{ if ne $linkBeaconchain "" }}
+                                <a class="img-beaconchain" href="{{$linkBeaconchain}}/slot/{{.Slot}}" target="_blank"
                                     alt="View slot in beaconcha.in" title="View slot in beaconcha.in"></a>
                                 &nbsp;
                                 {{ end }}
