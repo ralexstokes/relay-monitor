@@ -181,7 +181,6 @@ func (srv *Webserver) getRouter() http.Handler {
 }
 
 func (srv *Webserver) updateHTML() {
-
 	// Fetch relay monitor stats. First fetch validator stats.
 	_countValidators, err := srv.store.GetCountValidators(context.Background())
 	if err != nil {

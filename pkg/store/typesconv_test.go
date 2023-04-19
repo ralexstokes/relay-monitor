@@ -12,7 +12,6 @@ import (
 )
 
 func TestBidEntryToBid(t *testing.T) {
-
 	versionedSignedBuilderBid := &spec.VersionedSignedBuilderBid{
 		Version: consensusspec.DataVersionCapella,
 		Capella: &capella.SignedBuilderBid{

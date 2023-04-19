@@ -17,9 +17,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-var (
-	configFile = flag.String("config", "config.website.example.yaml", "path to website config file")
-)
+var configFile = flag.String("config", "config.website.example.yaml", "path to website config file")
 
 func main() {
 	flag.Parse()
