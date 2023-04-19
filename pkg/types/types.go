@@ -528,6 +528,7 @@ type Record struct {
 	Slot           uint64 `db:"slot"`
 	ParentHash     string `db:"parent_hash"`
 	ProposerPubkey string `db:"proposer_pubkey"`
+	Reason         string `db:"reason"`
 }
 
 type Records struct {

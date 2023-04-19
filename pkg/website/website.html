@@ -272,6 +272,7 @@
                         <th>Slot</th>
                         <th>Parent hash</th>
                         <th>Proposer</th>
+                        <th>Reason</th>
                         <th></th>
                     </tr>
                 </thead>
@@ -282,6 +283,7 @@
                         <td>{{.Slot | prettyInt}}</td>
                         <td>{{.ParentHash }}</td>
                         <td>{{.ProposerPubkey }}</td>
+                        <td>{{.Reason }}</td>
                         <td>
                             <div class="icons-container">
                                 {{ if ne $linkBeaconchain "" }}

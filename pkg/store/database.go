@@ -330,7 +330,7 @@ func (store *PostgresStore) GetRelays(ctx context.Context) ([]*types.Relay, erro
 }
 
 func (store *PostgresStore) GetRecordsAnalysisWithinSlotBounds(ctx context.Context, relayPubkey string, slotBounds *types.SlotBounds, filter *types.AnalysisQueryFilter) ([]*types.Record, error) {
-	query := `SELECT slot, parent_hash, proposer_pubkey FROM ` + TableBidsAnalysis + `
+	query := `SELECT slot, parent_hash, proposer_pubkey, reason FROM ` + TableBidsAnalysis + `
 	WHERE relay_pubkey = '` + relayPubkey + `'`
 
 	// Add a bounds filter.
