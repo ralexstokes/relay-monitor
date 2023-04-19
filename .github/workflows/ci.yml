@@ -32,20 +32,20 @@ jobs:
       - name: Set up Go 1.x
         uses: actions/setup-go@v3
         with:
-          go-version: ^1.19
+          go-version: ^1.20
         id: go
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
 
       - name: Install gofumpt
-        run: go install mvdan.cc/gofumpt@latest
+        run:  go install mvdan.cc/gofumpt@v0.4.0
 
       - name: Install staticcheck
-        run: go install honnef.co/go/tools/cmd/staticcheck@v0.3.3
+        run: go install honnef.co/go/tools/cmd/staticcheck@v0.4.2
 
       - name: Install golangci-lint
-        run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.51.2
 
       - name: Lint
         run: make lint
