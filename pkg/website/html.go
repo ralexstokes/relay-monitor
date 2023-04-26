@@ -43,10 +43,11 @@ type StatusHTMLData struct { //nolint:musttag
 	CountBidsAnalyzedValid       uint64
 	CountBidsAnalyzedFault       uint64
 
-	ShowConfigDetails   bool
-	LinkBeaconchain     string
-	LinkEtherscan       string
-	LinkRelayMonitorAPI string
+	ShowConfigDetails     bool
+	LinkBeaconchain       string
+	LinkEtherscan         string
+	LinkRelayMonitorAPI   string
+	LinkRelayMonitorNotes string
 
 	LookbackSlotsValue uint64
 }

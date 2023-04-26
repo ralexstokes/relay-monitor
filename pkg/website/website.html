@@ -209,6 +209,7 @@
                     <ul>
                         <li><a href="https://github.com/ralexstokes/relay-monitor">ralexstokes/relay-monitor</a></li>
                         <li><a href="{{.LinkRelayMonitorAPI}}">Relay Monitor API spec</a></li>
+                        <li><a href="{{.LinkRelayMonitorNotes}}">Relay Monitor Notes</a></li>
                     </ul>
                     <ul>
                         <li><a href="http://boost.flashbots.net">boost.flashbots.net</a></li>
@@ -225,7 +226,9 @@
 
             <p>Note:</p>
             <blockquote>
-                All metrics displayed and computed are for the last 24 hours (7200 slots). For custom ranges, see
+                All metrics displayed and computed are for the last {{ .LookbackSlotsValue }} slots (~{{ div
+                .LookbackSlotsValue 300 }}hr). For custom ranges,
+                see
                 the <a href="{{.LinkRelayMonitorAPI}}">API spec</a>.
             </blockquote>
 
@@ -429,6 +432,8 @@
             <center>
                 <p>
                     <small>
+                        <a href="{{.LinkRelayMonitorNotes}}">Notes</a>
+                        &middot;
                         <a href="{{.LinkRelayMonitorAPI}}">Spec</a>
                         &middot;
                         <a href="https://github.com/ralexstokes/relay-monitor">Code</a>

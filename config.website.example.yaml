@@ -3,6 +3,8 @@ network:
   name: "sepolia"
 consensus:
   endpoint: "http://localhost:5052"
+data:
+  lookback_slots_value: 7200
 website:
   host: "localhost"
   port: 9060
@@ -10,5 +12,6 @@ website:
   link_beaconchain: "https://beaconcha.in"
   link_etherscan: "https://etherscan.io"
   link_relay_monitor_api: "http://localhost:8080"
+  link_relay_monitor_notes: "http://localhost:8080"
 store:
   dsn: "postgresql://localhost:5432/rm_sepolia?sslmode=disable"

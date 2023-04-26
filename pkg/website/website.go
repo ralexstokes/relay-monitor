@@ -33,18 +33,24 @@ var (
 	EnablePprof             = os.Getenv("PPROF") == "1"
 )
 
+type DataConfig struct {
+	LookbackSlotsValue uint64 `yaml:"lookback_slots_value"`
+}
+
 type WebsiteConfig struct {
-	Host                string `yaml:"host"`
-	Port                uint16 `yaml:"port"`
-	ShowConfigDetails   bool   `yaml:"show_config_details"`
-	LinkBeaconchain     string `yaml:"link_beaconchain"`
-	LinkEtherscan       string `yaml:"link_etherscan"`
-	LinkRelayMonitorAPI string `yaml:"link_relay_monitor_api"`
+	Host                  string `yaml:"host"`
+	Port                  uint16 `yaml:"port"`
+	ShowConfigDetails     bool   `yaml:"show_config_details"`
+	LinkBeaconchain       string `yaml:"link_beaconchain"`
+	LinkEtherscan         string `yaml:"link_etherscan"`
+	LinkRelayMonitorAPI   string `yaml:"link_relay_monitor_api"`
+	LinkRelayMonitorNotes string `yaml:"link_relay_monitor_notes"`
 }
 
 type Config struct {
 	Network   *monitor.NetworkConfig   `yaml:"network"`
 	Consensus *monitor.ConsensusConfig `yaml:"consensus"`
+	Data      *DataConfig              `yaml:"data"`
 	Store     *monitor.StoreConfig     `yaml:"store"`
 	Website   *WebsiteConfig           `yaml:"website"`
 }
@@ -58,10 +64,11 @@ type WebserverOpts struct {
 	Clock    *consensus.Clock
 	Log      *zap.SugaredLogger
 
-	ShowConfigDetails   bool
-	LinkBeaconchain     string
-	LinkEtherscan       string
-	LinkRelayMonitorAPI string
+	ShowConfigDetails     bool
+	LinkBeaconchain       string
+	LinkEtherscan         string
+	LinkRelayMonitorAPI   string
+	LinkRelayMonitorNotes string
 
 	LookbackSlotsValue uint64
 }
@@ -132,6 +139,7 @@ func NewWebserver(opts *WebserverOpts) (*Webserver, error) {
 		LinkBeaconchain:              opts.LinkBeaconchain,
 		LinkEtherscan:                opts.LinkEtherscan,
 		LinkRelayMonitorAPI:          opts.LinkRelayMonitorAPI,
+		LinkRelayMonitorNotes:        opts.LinkRelayMonitorNotes,
 		LookbackSlotsValue:           opts.LookbackSlotsValue,
 	}
 

@@ -75,17 +75,19 @@ func main() {
 
 	// Create the website service
 	opts := &website.WebserverOpts{
-		ListenAddress:       websiteListenAddr,
-		NetworkDetails:      networkInfo,
-		Store:               store,
-		Reporter:            reporter,
-		Clock:               clock,
-		ShowConfigDetails:   config.Website.ShowConfigDetails,
-		LinkBeaconchain:     config.Website.LinkBeaconchain,
-		LinkEtherscan:       config.Website.LinkEtherscan,
-		LinkRelayMonitorAPI: config.Website.LinkRelayMonitorAPI,
-		LookbackSlotsValue:  7200, // 24 hours
-		Log:                 logger,
+		ListenAddress:         websiteListenAddr,
+		NetworkDetails:        networkInfo,
+		Store:                 store,
+		Reporter:              reporter,
+		Clock:                 clock,
+		ShowConfigDetails:     config.Website.ShowConfigDetails,
+		LinkBeaconchain:       config.Website.LinkBeaconchain,
+		LinkEtherscan:         config.Website.LinkEtherscan,
+		LinkRelayMonitorAPI:   config.Website.LinkRelayMonitorAPI,
+		LinkRelayMonitorNotes: config.Website.LinkRelayMonitorNotes,
+
+		LookbackSlotsValue: config.Data.LookbackSlotsValue,
+		Log:                logger,
 	}
 
 	srv, err := website.NewWebserver(opts)
