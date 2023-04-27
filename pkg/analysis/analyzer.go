@@ -170,15 +170,15 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 		return invalidBidErr, nil
 	}
 
-	// validSignature, err := crypto.VerifySignature(bid.Message, a.consensusClient.SignatureDomainForBuilder(), bid.Message.Pubkey[:], bid.Signature[:])
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// if !validSignature {
-	// 	invalidBidErr.Reason = "relay public key does not match signature"
-	// 	// No actual and expected when signatures don't match
-	// 	return invalidBidErr, nil
-	// }
+	validSignature, err := crypto.VerifySignature(bid.Message, a.consensusClient.SignatureDomainForBuilder(), bid.Message.Pubkey[:], bid.Signature[:])
+	if err != nil {
+		return nil, err
+	}
+	if !validSignature {
+		invalidBidErr.Reason = "relay public key does not match signature"
+		// No actual and expected when signatures don't match
+		return invalidBidErr, nil
+	}
 
 	header := bid.Message.Header
 
