@@ -325,7 +325,7 @@ func (c *Client) FetchBlock(ctx context.Context, slot types.Slot) error {
 	// NOTE: need to check `exists` first...
 	if !exists {
 		// Sleep 1s and then retry in case it was a Node issue
-		logger.Warnf("could not find slot: %s. Retrying in 1s.", slot)
+		logger.Warnf("could not find slot: %d. Retrying in 1s.", slot)
 		time.Sleep(1 * time.Second)
 		// Try 3 previous slots
 		for i := 0; i < 4; i++ {
