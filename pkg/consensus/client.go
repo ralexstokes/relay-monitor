@@ -318,12 +318,17 @@ func (c *Client) FetchBlockRequest(ctx context.Context, slot types.Slot, dest *e
 
 func (c *Client) FetchBlock(ctx context.Context, slot types.Slot) error {
 	// TODO handle reorgs, etc.
+	logger := c.logger.Sugar()
+
 	var signedBeaconBlock eth2api.VersionedSignedBeaconBlock
 	exists, err := c.FetchBlockRequest(ctx, slot, &signedBeaconBlock)
 	// NOTE: need to check `exists` first...
 	if !exists {
+		// Sleep 1s and then retry in case it was a Node issue
+		logger.Warnf("could not find slot: %s. Retrying in 1s.", slot)
+		time.Sleep(1 * time.Second)
 		// Try 3 previous slots
-		for i := 1; i < 4; i++ {
+		for i := 0; i < 4; i++ {
 			targetSlot := slot - uint64(i)
 			exists, err := c.FetchBlockRequest(ctx, targetSlot, &signedBeaconBlock)
 			if exists && err == nil {
