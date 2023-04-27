@@ -228,7 +228,7 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 	if expectedBlockNumber != header.BlockNumber {
 		invalidBidErr.Reason = "invalid block number"
 		invalidBidErr.Context[ExpectedKey] = expectedBlockNumber
-		invalidBidErr.Context[ActualKey] = header.BlockHash
+		invalidBidErr.Context[ActualKey] = header.BlockNumber
 		return invalidBidErr, nil
 	}
 
