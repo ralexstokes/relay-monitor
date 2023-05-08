@@ -3,6 +3,7 @@ package consensus
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -316,24 +317,40 @@ func (c *Client) FetchBlockRequest(ctx context.Context, slot types.Slot, dest *e
 	return exists, err
 }
 
+func (c *Client) RetryBlockRequest(ctx context.Context, slot types.Slot, dest *eth2api.VersionedSignedBeaconBlock) error {
+	// Retry previous slot 3 times
+	logger := c.logger.Sugar()
+	for i := 0; i < 3; i++ {
+		logger.Warnf("could not find slot: %d. Retrying in 1s. Attempt %d", slot, i)
+		// Sleep 1s and then retry in case it was a Node issue
+		time.Sleep(1 * time.Second)
+		exists, err := c.FetchBlockRequest(ctx, slot, dest)
+		if exists && err == nil {
+			return err
+		}
+	}
+	// Try 3 previous slots
+	for i := 1; i < 4; i++ {
+		targetSlot := slot - uint64(i)
+		logger.Warnf("could not find slot: %d. Retrying with previous slot %d", slot, targetSlot)
+		exists, err := c.FetchBlockRequest(ctx, targetSlot, dest)
+		if exists && err == nil {
+			return err
+		}
+	}
+	logger.Errorf("all block requests have failed starting at slot %d", slot)
+	return errors.New("all block requests have failed")
+}
+
 func (c *Client) FetchBlock(ctx context.Context, slot types.Slot) error {
 	// TODO handle reorgs, etc.
-	logger := c.logger.Sugar()
-
 	var signedBeaconBlock eth2api.VersionedSignedBeaconBlock
 	exists, err := c.FetchBlockRequest(ctx, slot, &signedBeaconBlock)
 	// NOTE: need to check `exists` first...
 	if !exists {
-		// Sleep 1s and then retry in case it was a Node issue
-		logger.Warnf("could not find slot: %d. Retrying in 1s.", slot)
-		time.Sleep(1 * time.Second)
-		// Try 3 previous slots
-		for i := 0; i < 4; i++ {
-			targetSlot := slot - uint64(i)
-			exists, err := c.FetchBlockRequest(ctx, targetSlot, &signedBeaconBlock)
-			if exists && err == nil {
-				break
-			}
+		err := c.RetryBlockRequest(ctx, slot, &signedBeaconBlock)
+		if err != nil {
+			return err
 		}
 	} else if err != nil {
 		return err
