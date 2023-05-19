@@ -15,3 +15,6 @@
 # vendor/
 
 relay-monitor
+
+.DS_Store
+.idea

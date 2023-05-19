@@ -2,61 +2,55 @@ package store
 
 import (
 	"context"
-	"fmt"
+	"time"
 
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 )
 
+// Interface for the state "storer" that a relay monitor can use for storing data.
 type Storer interface {
-	PutBid(context.Context, *types.BidContext, *types.Bid) error
+	PutBid(context.Context, *types.BidContext, *types.VersionedBid) error
 	PutValidatorRegistration(context.Context, *types.SignedValidatorRegistration) error
-	PutAcceptance(context.Context, *types.BidContext, *types.SignedBlindedBeaconBlock) error
+	PutAcceptance(context.Context, *types.BidContext, *types.VersionedAcceptance) error
 
-	GetBid(context.Context, *types.BidContext) (*types.Bid, error)
+	GetBid(context.Context, *types.BidContext) (*types.VersionedBid, error)
+
 	// `GetValidatorRegistrations` returns all known registrations for the validator's public key, sorted by timestamp (increasing).
-	GetValidatorRegistrations(context.Context, *types.PublicKey) ([]types.SignedValidatorRegistration, error)
-}
+	GetValidatorRegistrations(context.Context, types.PublicKey) ([]*types.SignedValidatorRegistration, error)
+	// `GetLatestValidatorRegistration` returns the latest known registration for the validator's public key.
+	GetLatestValidatorRegistration(context.Context, types.PublicKey) (*types.SignedValidatorRegistration, error)
+	// `GetCountValidatorsRegistrations`returns the total number of valid registrations processed.
+	GetCountValidatorsRegistrations(ctx context.Context) (uint, error)
+	// `GetCountValidators`returns the number of validators that have successfully submitted at least one registration.
+	GetCountValidators(ctx context.Context) (uint, error)
 
-type MemoryStore struct {
-	bids          map[types.BidContext]*types.Bid
-	registrations map[types.PublicKey][]types.SignedValidatorRegistration
-	acceptances   map[types.BidContext]types.SignedBlindedBeaconBlock
-}
+	// TODO: look to refactor the way analysis is stored by referencing the bid in TableBids
+	// with a foreing key / etc. in order to not store all 4 context fields that act as the
+	// unique ID, since this is way too much data duplication.
+	// Need to refactor Bid insert/fetch to return the ID.
 
-func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{
-		bids:          make(map[types.BidContext]*types.Bid),
-		registrations: make(map[types.PublicKey][]types.SignedValidatorRegistration),
-		acceptances:   make(map[types.BidContext]types.SignedBlindedBeaconBlock),
-	}
-}
+	// Something like this?
+	//
+	// -- reference to the bid entry
+	// bid_id                  bigint NOT NULL,
 
-func (s *MemoryStore) PutBid(ctx context.Context, bidCtx *types.BidContext, bid *types.Bid) error {
-	s.bids[*bidCtx] = bid
-	return nil
-}
+	// CONSTRAINT fk_bid
+	// 		FOREIGN KEY(bid_id)
+	// 			REFERENCES ` + TableBids + `(id)
+	//
+	// For now use the bid context and do a JOIN on these with the Bids table if want more Bid data
+	// fields.
+	PutBidAnalysis(context.Context, *types.BidContext, *types.InvalidBid) error
 
-func (s *MemoryStore) GetBid(ctx context.Context, bidCtx *types.BidContext) (*types.Bid, error) {
-	bid, ok := s.bids[*bidCtx]
-	if !ok {
-		return nil, fmt.Errorf("could not find bid for %+v", bidCtx)
-	}
-	return bid, nil
-}
+	PutRelay(context.Context, *types.Relay) error
+	GetRelay(context.Context, types.PublicKey) (*types.Relay, error)
+	GetRelays(context.Context) ([]*types.Relay, error)
 
-func (s *MemoryStore) PutValidatorRegistration(ctx context.Context, registration *types.SignedValidatorRegistration) error {
-	publicKey := registration.Message.Pubkey
-	registrations := s.registrations[publicKey]
-	registrations = append(registrations, *registration)
-	s.registrations[publicKey] = registrations
-	return nil
-}
+	// Analysis metrics getters.
+	GetCountAnalysisLookbackSlots(ctx context.Context, lookbackSlots uint64, filter *types.AnalysisQueryFilter) (uint64, error)
+	GetCountAnalysisLookbackDuration(ctx context.Context, lookbackDuration time.Duration, filter *types.AnalysisQueryFilter) (uint64, error)
 
-func (s *MemoryStore) PutAcceptance(ctx context.Context, bidCtx *types.BidContext, acceptance *types.SignedBlindedBeaconBlock) error {
-	s.acceptances[*bidCtx] = *acceptance
-	return nil
-}
-
-func (s *MemoryStore) GetValidatorRegistrations(ctx context.Context, publicKey *types.PublicKey) ([]types.SignedValidatorRegistration, error) {
-	return s.registrations[*publicKey], nil
+	// Stats and record getters within slot bounds.
+	GetCountAnalysisWithinSlotBounds(ctx context.Context, relayPubkey string, slotBounds *types.SlotBounds, filter *types.AnalysisQueryFilter) (uint64, error)
+	GetRecordsAnalysisWithinSlotBounds(ctx context.Context, relayPubkey string, slotBounds *types.SlotBounds, filter *types.AnalysisQueryFilter) ([]*types.Record, error)
 }

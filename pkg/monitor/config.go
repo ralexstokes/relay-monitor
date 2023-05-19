@@ -4,6 +4,10 @@ import (
 	"github.com/ralexstokes/relay-monitor/pkg/api"
 )
 
+type StoreConfig struct {
+	Dsn string `yaml:"dsn"`
+}
+
 type NetworkConfig struct {
 	Name string `yaml:"name"`
 }
@@ -17,4 +21,5 @@ type Config struct {
 	Consensus *ConsensusConfig `yaml:"consensus"`
 	Relays    []string         `yaml:"relays"`
 	Api       *api.Config      `yaml:"api"`
+	Store     *StoreConfig     `yaml:"store"`
 }

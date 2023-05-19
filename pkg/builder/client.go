@@ -7,7 +7,9 @@ import (
 	"net/url"
 	"time"
 
-	boostTypes "github.com/flashbots/go-boost-utils/types"
+	"github.com/attestantio/go-builder-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 )
 
@@ -16,8 +18,12 @@ const clientTimeoutSec = 2
 type Client struct {
 	endpoint  string
 	hostname  string
-	PublicKey types.PublicKey
+	PublicKey phase0.BLSPubKey
 	client    http.Client
+}
+
+func (c *Client) Endpoint() string {
+	return c.endpoint
 }
 
 func (c *Client) Hostname() string {
@@ -35,10 +41,8 @@ func NewClient(endpoint string) (*Client, error) {
 	}
 
 	hostname := u.Hostname()
-
 	publicKeyStr := u.User.Username()
-	var publicKey types.PublicKey
-	err = publicKey.UnmarshalText([]byte(publicKeyStr))
+	publicKey, err := types.BLSPubKeyFromHexString(publicKeyStr)
 	if err != nil {
 		return nil, err
 	}
@@ -72,9 +76,9 @@ func (c *Client) GetStatus() error {
 	return nil
 }
 
-// GetBid implements the `getHeader` endpoint in the Builder API
+// GetBid implements the `getHeader` endpoint in the Builder API.
 // A return value of `(nil, nil)` indicates the relay was reachable but had no bid for the given parameters
-func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.PublicKey) (*types.Bid, error) {
+func (c *Client) GetBid(slot types.Slot, parentHash phase0.Hash32, publicKey phase0.BLSPubKey) (*types.VersionedBid, error) {
 	bidUrl := c.endpoint + fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot, parentHash, publicKey)
 	req, err := http.NewRequest(http.MethodGet, bidUrl, nil)
 	if err != nil {
@@ -91,7 +95,12 @@ func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.
 		return nil, fmt.Errorf("failed to get bid with HTTP status code %d", resp.StatusCode)
 	}
 
-	var bid boostTypes.GetHeaderResponse
+	var bid spec.VersionedSignedBuilderBid
 	err = json.NewDecoder(resp.Body).Decode(&bid)
-	return bid.Data, err
+	if err != nil {
+		return nil, err
+	}
+	return &types.VersionedBid{
+		Bid: &bid,
+	}, err
 }

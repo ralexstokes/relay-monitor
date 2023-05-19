@@ -1,12 +1,14 @@
 package crypto
 
-import "github.com/flashbots/go-boost-utils/types"
-
-var (
-	VerifySignature          = types.VerifySignature
-	DomainTypeAppBuilder     = types.DomainTypeAppBuilder
-	DomainTypeBeaconProposer = types.DomainTypeBeaconProposer
-	ComputeDomain            = types.ComputeDomain
+import (
+	boostTypes "github.com/flashbots/go-boost-utils/types"
 )
 
-type Domain = types.Domain
+var (
+	VerifySignature          = boostTypes.VerifySignature
+	DomainTypeAppBuilder     = boostTypes.DomainTypeAppBuilder
+	DomainTypeBeaconProposer = boostTypes.DomainTypeBeaconProposer
+	ComputeDomain            = boostTypes.ComputeDomain
+)
+
+type Domain = boostTypes.Domain

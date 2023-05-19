@@ -11,14 +11,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common/math"
+	boostTypes "github.com/flashbots/go-boost-utils/types"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/holiman/uint256"
 	"github.com/protolambda/eth2api"
 	"github.com/protolambda/eth2api/client/beaconapi"
 	"github.com/protolambda/eth2api/client/configapi"
 	"github.com/protolambda/eth2api/client/validatorapi"
-	"github.com/protolambda/zrnt/eth2/beacon/bellatrix"
+	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/r3labs/sse/v2"
 	"github.com/ralexstokes/relay-monitor/pkg/crypto"
@@ -50,12 +52,14 @@ type Client struct {
 	SlotsPerEpoch         uint64
 	SecondsPerSlot        uint64
 	GenesisTime           uint64
-	genesisForkVersion    types.ForkVersion
-	GenesisValidatorsRoot types.Root
-	altairForkVersion     types.ForkVersion
+	genesisForkVersion    boostTypes.ForkVersion
+	GenesisValidatorsRoot boostTypes.Hash
+	altairForkVersion     boostTypes.ForkVersion
 	altairForkEpoch       types.Epoch
-	bellatrixForkVersion  types.ForkVersion
+	bellatrixForkVersion  boostTypes.ForkVersion
 	bellatrixForkEpoch    types.Epoch
+	capellaForkVersion    boostTypes.ForkVersion
+	capellaForkEpoch      types.Epoch
 
 	builderSignatureDomain *crypto.Domain
 
@@ -129,7 +133,7 @@ func NewClient(ctx context.Context, endpoint string, logger *zap.Logger) (*Clien
 
 func (c *Client) SignatureDomainForBuilder() crypto.Domain {
 	if c.builderSignatureDomain == nil {
-		domain := crypto.Domain(crypto.ComputeDomain(crypto.DomainTypeAppBuilder, c.genesisForkVersion, types.Root{}))
+		domain := crypto.Domain(crypto.ComputeDomain(crypto.DomainTypeAppBuilder, c.genesisForkVersion, boostTypes.Root{}))
 		c.builderSignatureDomain = &domain
 	}
 	return *c.builderSignatureDomain
@@ -144,7 +148,7 @@ func (c *Client) LoadCurrentContext(ctx context.Context, currentSlot types.Slot,
 	logger := c.logger.Sugar()
 
 	for i := uint64(0); i < c.SlotsPerEpoch; i++ {
-		err := c.FetchBlock(ctx, currentSlot-i)
+		err := c.FetchBlock(ctx, currentSlot-phase0.Slot(i))
 		if err != nil {
 			logger.Warnf("could not fetch latest block for slot %d: %v", currentSlot, err)
 		}
@@ -180,8 +184,8 @@ func (c *Client) fetchGenesis(ctx context.Context) error {
 	}
 
 	c.GenesisTime = uint64(resp.GenesisTime)
-	c.genesisForkVersion = types.ForkVersion(resp.GenesisForkVersion)
-	c.GenesisValidatorsRoot = types.Hash(resp.GenesisValidatorsRoot)
+	c.genesisForkVersion = boostTypes.ForkVersion(resp.GenesisForkVersion)
+	c.GenesisValidatorsRoot = boostTypes.Hash(resp.GenesisValidatorsRoot)
 	return nil
 }
 
@@ -194,17 +198,21 @@ func (c *Client) fetchSpec(ctx context.Context) error {
 
 	c.SlotsPerEpoch = uint64(spec.Phase0Preset.SLOTS_PER_EPOCH)
 	c.SecondsPerSlot = uint64(spec.Config.SECONDS_PER_SLOT)
-	c.altairForkVersion = types.ForkVersion(spec.Config.ALTAIR_FORK_VERSION)
+	c.altairForkVersion = boostTypes.ForkVersion(spec.Config.ALTAIR_FORK_VERSION)
 	c.altairForkEpoch = types.Epoch(spec.Config.ALTAIR_FORK_EPOCH)
-	c.bellatrixForkVersion = types.ForkVersion(spec.Config.BELLATRIX_FORK_VERSION)
+	c.bellatrixForkVersion = boostTypes.ForkVersion(spec.Config.BELLATRIX_FORK_VERSION)
 	c.bellatrixForkEpoch = types.Epoch(spec.Config.BELLATRIX_FORK_EPOCH)
+	c.capellaForkVersion = boostTypes.ForkVersion(spec.Config.CAPELLA_FORK_VERSION)
+	c.capellaForkEpoch = types.Epoch(spec.Config.CAPELLA_FORK_EPOCH)
 	return nil
 }
 
 // NOTE: this assumes the fork schedule is presented in ascending order
-func (c *Client) GetForkVersion(slot types.Slot) types.ForkVersion {
-	epoch := slot / c.SlotsPerEpoch
-	if epoch >= c.bellatrixForkEpoch {
+func (c *Client) GetForkVersion(slot types.Slot) boostTypes.ForkVersion {
+	epoch := uint64(slot) / c.SlotsPerEpoch
+	if epoch >= c.capellaForkEpoch {
+		return c.capellaForkVersion
+	} else if epoch >= c.bellatrixForkEpoch {
 		return c.bellatrixForkVersion
 	} else if epoch >= c.altairForkEpoch {
 		return c.altairForkVersion
@@ -225,7 +233,7 @@ func (c *Client) GetProposer(slot types.Slot) (*ValidatorInfo, error) {
 	return &validator, nil
 }
 
-func (c *Client) GetBlock(slot types.Slot) (*bellatrix.SignedBeaconBlock, error) {
+func (c *Client) GetBlock(slot types.Slot) (*capella.SignedBeaconBlock, error) {
 	val, ok := c.blockCache.Get(slot)
 	if !ok {
 		// TODO pipe in context
@@ -238,18 +246,18 @@ func (c *Client) GetBlock(slot types.Slot) (*bellatrix.SignedBeaconBlock, error)
 			return nil, fmt.Errorf("could not find block for slot %d", slot)
 		}
 	}
-	block, ok := val.(*bellatrix.SignedBeaconBlock)
+	block, ok := val.(*capella.SignedBeaconBlock)
 	if !ok {
 		return nil, fmt.Errorf("internal: block cache contains an unexpected value %v with type %T", val, val)
 	}
 	return block, nil
 }
 
-func (c *Client) GetValidator(publicKey *types.PublicKey) (*eth2api.ValidatorResponse, error) {
+func (c *Client) GetValidator(publicKey types.PublicKey) (*eth2api.ValidatorResponse, error) {
 	c.validatorLock.RLock()
 	defer c.validatorLock.RUnlock()
 
-	validator, ok := c.validatorCache[*publicKey]
+	validator, ok := c.validatorCache[publicKey]
 	if !ok {
 		return nil, fmt.Errorf("missing validator entry for public key %s", publicKey)
 	}
@@ -285,9 +293,9 @@ func (c *Client) FetchProposers(ctx context.Context, epoch types.Epoch) error {
 
 	// TODO handle reorgs, etc.
 	for _, duty := range proposerDuties.Data {
-		c.proposerCache.Add(uint64(duty.Slot), ValidatorInfo{
+		c.proposerCache.Add(phase0.Slot(duty.Slot), ValidatorInfo{
 			publicKey: types.PublicKey(duty.Pubkey),
-			index:     uint64(duty.ValidatorIndex),
+			index:     phase0.ValidatorIndex(duty.ValidatorIndex),
 		})
 	}
 
@@ -299,6 +307,7 @@ func (c *Client) FetchBlock(ctx context.Context, slot types.Slot) error {
 	blockID := eth2api.BlockIdSlot(slot)
 
 	var signedBeaconBlock eth2api.VersionedSignedBeaconBlock
+
 	exists, err := beaconapi.BlockV2(ctx, c.client, blockID, &signedBeaconBlock)
 	// NOTE: need to check `exists` first...
 	if !exists {
@@ -307,19 +316,19 @@ func (c *Client) FetchBlock(ctx context.Context, slot types.Slot) error {
 		return err
 	}
 
-	bellatrixBlock, ok := signedBeaconBlock.Data.(*bellatrix.SignedBeaconBlock)
+	capellaBlock, ok := signedBeaconBlock.Data.(*capella.SignedBeaconBlock)
 	if !ok {
 		return fmt.Errorf("could not parse block %s", signedBeaconBlock)
 	}
 
-	c.blockCache.Add(slot, bellatrixBlock)
-	c.blockNumberToSlotIndex.Add(uint64(bellatrixBlock.Message.Body.ExecutionPayload.BlockNumber), slot)
+	c.blockCache.Add(slot, capellaBlock)
+	c.blockNumberToSlotIndex.Add(uint64(capellaBlock.Message.Body.ExecutionPayload.BlockNumber), slot)
 	return nil
 }
 
 type headEvent struct {
-	Slot  string     `json:"slot"`
-	Block types.Root `json:"block"`
+	Slot  string          `json:"slot"`
+	Block boostTypes.Root `json:"block"`
 }
 
 func (c *Client) StreamHeads(ctx context.Context) <-chan types.Coordinate {
@@ -342,7 +351,7 @@ func (c *Client) StreamHeads(ctx context.Context) <-chan types.Coordinate {
 			}
 			head := types.Coordinate{
 				Slot: types.Slot(slot),
-				Root: event.Block,
+				Root: types.Root(event.Block),
 			}
 			ch <- head
 		})
@@ -371,13 +380,13 @@ func (c *Client) FetchValidators(ctx context.Context) error {
 		publicKey := validator.Validator.Pubkey
 		key := types.PublicKey(publicKey)
 		c.validatorCache[key] = &validator
-		c.validatorIndexCache[uint64(validator.Index)] = &key
+		c.validatorIndexCache[phase0.ValidatorIndex(validator.Index)] = &key
 	}
 
 	return nil
 }
 
-func (c *Client) GetValidatorStatus(publicKey *types.PublicKey) (ValidatorStatus, error) {
+func (c *Client) GetValidatorStatus(publicKey types.PublicKey) (ValidatorStatus, error) {
 	validator, err := c.GetValidator(publicKey)
 	if err != nil {
 		return StatusValidatorUnknown, err
@@ -392,7 +401,7 @@ func (c *Client) GetValidatorStatus(publicKey *types.PublicKey) (ValidatorStatus
 	}
 }
 
-func (c *Client) GetRandomnessForProposal(slot types.Slot /*, proposerPublicKey *types.PublicKey */) (types.Hash, error) {
+func (c *Client) GetRandomnessForProposal(slot types.Slot /*, proposerPublicKey *types.PublicKey */) (phase0.Hash32, error) {
 	targetSlot := slot - 1
 	// TODO support branches w/ proposer public key
 	// TODO pipe in context
@@ -459,7 +468,7 @@ func (c *Client) GetParentGasLimit(ctx context.Context, blockNumber uint64) (uin
 	if !ok {
 		return 0, fmt.Errorf("missing block for block number %d", blockNumber)
 	}
-	slot, ok := slotValue.(uint64)
+	slot, ok := slotValue.(types.Slot)
 	if !ok {
 		return 0, fmt.Errorf("internal: unexpected type %T in block number to slot index", slotValue)
 	}

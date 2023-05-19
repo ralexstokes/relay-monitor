@@ -11,6 +11,7 @@ import (
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
 	"github.com/ralexstokes/relay-monitor/pkg/data"
 	"github.com/ralexstokes/relay-monitor/pkg/store"
+	"github.com/ralexstokes/relay-monitor/pkg/types"
 	"go.uber.org/zap"
 )
 
@@ -24,7 +25,7 @@ type Monitor struct {
 	analyzer  *analysis.Analyzer
 }
 
-func parseRelaysFromEndpoint(logger *zap.SugaredLogger, relayEndpoints []string) []*builder.Client {
+func parseRelaysFromEndpoint(ctx context.Context, store *store.PostgresStore, relayEndpoints []string, logger *zap.SugaredLogger) []*builder.Client {
 	var relays []*builder.Client
 	for _, endpoint := range relayEndpoints {
 		relay, err := builder.NewClient(endpoint)
@@ -39,6 +40,17 @@ func parseRelaysFromEndpoint(logger *zap.SugaredLogger, relayEndpoints []string)
 			continue
 		}
 
+		// Save relay to DB if it doesn't exist.
+		err = store.PutRelay(ctx, &types.Relay{
+			Pubkey:   relay.PublicKey.String(),
+			Hostname: relay.Hostname(),
+			Endpoint: relay.Endpoint(),
+		})
+		if err != nil {
+			logger.Warnf("could not save relay %s to DB: %v", endpoint, err)
+			continue
+		}
+
 		relays = append(relays, relay)
 	}
 	if len(relays) == 0 {
@@ -50,13 +62,22 @@ func parseRelaysFromEndpoint(logger *zap.SugaredLogger, relayEndpoints []string)
 func New(ctx context.Context, config *Config, zapLogger *zap.Logger) (*Monitor, error) {
 	logger := zapLogger.Sugar()
 
-	relays := parseRelaysFromEndpoint(logger, config.Relays)
+	// Create the store.
+	store, err := store.NewPostgresStore(config.Store.Dsn, zapLogger)
+	if err != nil {
+		logger.Fatal("could not instantiate postgres store", zap.Error(err))
+	}
 
+	// Parse the relays from the config.
+	relays := parseRelaysFromEndpoint(ctx, store, config.Relays, logger)
+
+	// Instantiate the consensus client.
 	consensusClient, err := consensus.NewClient(ctx, config.Consensus.Endpoint, zapLogger)
 	if err != nil {
 		return nil, fmt.Errorf("could not instantiate consensus client: %v", err)
 	}
 
+	// Handle the timing: get the current slot and epoch.
 	clock := consensus.NewClock(consensusClient.GenesisTime, consensusClient.SecondsPerSlot, consensusClient.SlotsPerEpoch)
 	now := time.Now().Unix()
 	currentSlot := clock.CurrentSlot(now)
@@ -67,12 +88,16 @@ func New(ctx context.Context, config *Config, zapLogger *zap.Logger) (*Monitor, 
 		logger.Warn("could not load the current context from the consensus client")
 	}
 
+	// Instantiate the data collector.
 	events := make(chan data.Event, eventBufferSize)
 	collector := data.NewCollector(zapLogger, relays, clock, consensusClient, events)
-	store := store.NewMemoryStore()
+
+	// Instantiate the analysis.
 	analyzer := analysis.NewAnalyzer(zapLogger, relays, events, store, consensusClient, clock)
 
+	// Instantiate the API server.
 	apiServer := api.New(config.Api, zapLogger, analyzer, events, clock, store, consensusClient)
+
 	return &Monitor{
 		logger:    zapLogger,
 		api:       apiServer,
