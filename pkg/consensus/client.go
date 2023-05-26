@@ -318,12 +318,12 @@ func (c *Client) FetchBlockRequest(ctx context.Context, slot types.Slot, dest *e
 }
 
 func (c *Client) RetryBlockRequest(ctx context.Context, slot types.Slot, dest *eth2api.VersionedSignedBeaconBlock) error {
-	// Retry previous slot 3 times
+	// Retry previous slot 5 times
 	logger := c.logger.Sugar()
-	for i := 0; i < 3; i++ {
-		logger.Warnf("could not find slot: %d. Retrying in 1s. Attempt %d", slot, i)
-		// Sleep 1s and then retry in case it was a Node issue
-		time.Sleep(1 * time.Second)
+	for i := 1; i < 6; i++ {
+		logger.Warnf("could not find slot: %d. Retrying in %ds. Attempt %d", slot, i, i)
+		// Sleep and then retry in case it was a Node issue
+		time.Sleep(time.Duration(i) * time.Second)
 		exists, err := c.FetchBlockRequest(ctx, slot, dest)
 		if exists && err == nil {
 			return err
