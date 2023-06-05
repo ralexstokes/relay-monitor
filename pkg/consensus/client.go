@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common/math"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/holiman/uint256"
@@ -54,7 +55,7 @@ type Client struct {
 	SecondsPerSlot        uint64
 	GenesisTime           uint64
 	genesisForkVersion    types.ForkVersion
-	GenesisValidatorsRoot types.Root
+	GenesisValidatorsRoot common.Root
 	altairForkVersion     types.ForkVersion
 	altairForkEpoch       types.Epoch
 	bellatrixForkVersion  types.ForkVersion
@@ -135,6 +136,7 @@ func NewClient(ctx context.Context, endpoint string, logger *zap.Logger) (*Clien
 func (c *Client) SignatureDomainForBuilder() crypto.Domain {
 	if c.builderSignatureDomain == nil {
 		domain := crypto.Domain(crypto.ComputeDomain(crypto.DomainTypeAppBuilder, c.genesisForkVersion, types.Root{}))
+		c.logger.Sugar().Debugf("genesisForkVersion: %v", c.genesisForkVersion)
 		c.builderSignatureDomain = &domain
 	}
 	return *c.builderSignatureDomain
@@ -142,7 +144,7 @@ func (c *Client) SignatureDomainForBuilder() crypto.Domain {
 
 func (c *Client) SignatureDomain(slot types.Slot) crypto.Domain {
 	forkVersion := c.GetForkVersion(slot)
-	return crypto.ComputeDomain(crypto.DomainTypeBeaconProposer, forkVersion, c.GenesisValidatorsRoot)
+	return crypto.ComputeDomain(crypto.DomainTypeBeaconProposer, forkVersion, phase0.Root(c.GenesisValidatorsRoot))
 }
 
 func (c *Client) LoadCurrentContext(ctx context.Context, currentSlot types.Slot, currentEpoch types.Epoch) error {
@@ -186,7 +188,8 @@ func (c *Client) FetchGenesis(ctx context.Context) error {
 
 	c.GenesisTime = uint64(resp.GenesisTime)
 	c.genesisForkVersion = types.ForkVersion(resp.GenesisForkVersion)
-	c.GenesisValidatorsRoot = types.Hash(resp.GenesisValidatorsRoot)
+	// c.GenesisValidatorsRoot = types.Hash(resp.GenesisValidatorsRoot)
+	c.GenesisValidatorsRoot = resp.GenesisValidatorsRoot
 	return nil
 }
 

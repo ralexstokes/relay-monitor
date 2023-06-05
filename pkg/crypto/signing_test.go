@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	boostTypes "github.com/flashbots/go-boost-utils/types"
+	boostTypes "github.com/flashbots/go-boost-utils/ssz"
 	"github.com/ralexstokes/relay-monitor/pkg/crypto"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 )
@@ -20,7 +20,7 @@ var (
 )
 
 const (
-	bidMessage string = `{"message":{"header":{"parent_hash":"0x18979f800e1b67ee1d6d29f08bb316badb2bb301f02f6611c241bcd4665e0a9f","fee_recipient":"0x690b9a9e9aa1c9db991c7721a92d351db4fac990","state_root":"0x5e267303781b42d6b7d35c7259db3d73e339408c2b165bbf822d099b277f8361","receipts_root":"0x43b3e500905209cddb14484d5e2acd070206e6a2e4064c4d36e284a1ff208028","logs_bloom":"0x0c773e8341e580eed462188abb72c3208316c69000aa607aa2a39652e480021036bff705003a41a805901b22db84c5571e115654da707dce6f1017156a78a734ca03483af3e548ef7eabe81bc3d0a9faac820e90b9c11af81994cc14dc819b219bc201039f0e8f4c24407cb06c42acd15928b4540cfaefa5eeeb0eba589b5bc8e7a70ff11224d8697c7adfc109820837ea8082a37b9c461c7bad554339735db19278090f33b9648756135cc0f052c60ed6620f9911ce88135327aab6177a6942c188a70254a46ef20562de322d492b4f41296a54a4e8cb7b0f87b5120d99a25cc1f1a8cf818cb1322f351e8e9e29ba472e9ca1b6d8f208494096fa48ba13d780","prev_randao":"0xfe30a5fabf7b11dc38827260ab9817be2f211e705178e71cae54657706f79fb0","block_number":"17344122","gas_limit":"30000000","gas_used":"14353928","timestamp":"1685114483","extra_data":"0x627920406275696c64657230783639","base_fee_per_gas":"32970824166","block_hash":"0x5564410419c9f38d53a2e2b08411c31b951b502352fdf44a44abce6469f186d5","transactions_root":"0x4df13964c141d866463a14ccbc992771e14650714a747700f2f720dcfb72c9c9"},"value": "458425265650592382","pubkey": "0xac6e77dfe25ecd6110b8e780608cce0dab71fdd5ebea22a16c0205200f2f8e2e3ad3b71d3499c54ad14d6c21b41a37ae"}}`
+	bidMessage string = `{"message": {"header": {"parent_hash": "0xa1acb27555a9b11da48fa774c05bcc305ea4fb3519adc30647cb1740fa26dabd", "fee_recipient": "0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5", "state_root": "0xefa75ce3912f721a17c51f2e09e5cdc6cff9280988d459ec1578c59fa5660791", "receipts_root": "0x80d84eb225cafc7784fb4c8c5331c4e2524781e8475bc05a5857556ed2c2ead7", "logs_bloom": "0xd021d86a4192d109878b4ae08250714d1258014ea6110d0802d96680279c9d10e487988a819ab3e702613b11d42b19237eb985608f13b98370160e4541ff4b6140cd83841cbc983de819714da2b451f66d930a4151da9e344c05ba0690741a384203ab818ea0d98b1dc9f00bb20b7c525eed45d53d431d2cd2f67bd58c0e0650963d7df94140955c23c904628d9fc656202c40a9434139c8a66188486b549c62266d3976deb8211b155254c0829617f84504e4045894414d4366af6fd6898037261816024a2b244d0996a48c1c3d5c747140a00a84a7ae78cc83890b180161600e1a6cd04c935106ba0612889605b8b40103ea38c183004202e83631821314df", "prev_randao": "0x9536bcc1b72cb4d3e889c669a06aea0ee5aabd2c33d24fc30bf638662d8ac3a6", "block_number": "17415288", "gas_limit": "30000000", "gas_used": "23810195", "timestamp": "1685979947", "extra_data": "0x6265617665726275696c642e6f7267", "base_fee_per_gas": "65067320965", "block_hash": "0x2368b0283ef2cf084571086a8d8bf819a23e17602f3df4c2a34b0508bccf5789", "transactions_root": "0x7a78af7f6fb3b18a41090bec358cdbc9838093a6405b8560d885e621f04b3a62", "withdrawals_root": "0xcf4a07f18729ffdb784e9b7e8425b21addb7642be2dc4a1e6b8238081753e27c"}, "value": "193637766565243815", "pubkey": "0xac6e77dfe25ecd6110b8e780608cce0dab71fdd5ebea22a16c0205200f2f8e2e3ad3b71d3499c54ad14d6c21b41a37ae"}, "signature": "0x995f29ae4c8045ecd6810bf24138297acc157c26185eb729f69655780e6c09a93e3bfea1ed2b12bc93ff4f693f7180ec0b9470c9acd2525c0b61cc3518033921268400326780d48679fe0ca9012f5eb33b91633a430ccca7e58ceb02677051fe"}`
 )
 
 var (
@@ -74,9 +74,8 @@ func TestBidSignature(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	genesisForkVersion := [4]byte{}
-	binary.BigEndian.PutUint32(genesisForkVersion[0:4], capellaForkVersionMainnetAsNumber)
-	domain := boostTypes.ComputeDomain(boostTypes.DomainTypeAppBuilder, genesisForkVersion, types.Root{})
+	genesisForkVersion := [4]byte{0x00, 0x00, 0x00, 0x00}
+	domain := crypto.Domain(boostTypes.ComputeDomain(boostTypes.DomainTypeAppBuilder, genesisForkVersion, types.Root{}))
 	valid, err := crypto.VerifySignature(bid.Message, domain, bid.Message.Pubkey[:], bid.Signature[:])
 	if err != nil {
 		t.Fatal(err)

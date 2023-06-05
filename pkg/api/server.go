@@ -179,14 +179,14 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) validateRegistrationTimestamp(registration, currentRegistration *types.SignedValidatorRegistration) error {
-	timestamp := registration.Message.Timestamp
+	timestamp := registration.Message.Timestamp.Unix()
 	deadline := time.Now().Add(10 * time.Second).Unix()
-	if timestamp >= uint64(deadline) {
+	if timestamp >= deadline {
 		return fmt.Errorf("invalid registration: too far in future, %+v", registration)
 	}
 
 	if currentRegistration != nil {
-		lastTimestamp := currentRegistration.Message.Timestamp
+		lastTimestamp := currentRegistration.Message.Timestamp.Unix()
 		if timestamp < lastTimestamp {
 			return fmt.Errorf("invalid registration: more recent successful registration, %+v", registration)
 		}

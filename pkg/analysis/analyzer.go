@@ -170,15 +170,15 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 		return invalidBidErr, nil
 	}
 
-	// validSignature, err := crypto.VerifySignature(bid.Message, a.consensusClient.SignatureDomainForBuilder(), bid.Message.Pubkey[:], bid.Signature[:])
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// if !validSignature {
-	// 	invalidBidErr.Reason = "relay public key does not match signature"
-	// 	// No actual and expected when signatures don't match
-	// 	return invalidBidErr, nil
-	// }
+	validSignature, err := crypto.VerifySignature(bid.Message, a.consensusClient.SignatureDomainForBuilder(), bid.Message.Pubkey[:], bid.Signature[:])
+	if err != nil {
+		return nil, err
+	}
+	if !validSignature {
+		invalidBidErr.Reason = "relay public key does not match signature"
+		// No actual and expected when signatures don't match
+		return invalidBidErr, nil
+	}
 
 	header := bid.Message.Header
 
@@ -215,9 +215,9 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 	if err != nil {
 		return nil, err
 	}
-	if expectedRandomness != header.Random {
+	if expectedRandomness != header.PrevRandao {
 		invalidBidErr.Context[ExpectedKey] = expectedRandomness
-		invalidBidErr.Context[ActualKey] = header.Random
+		invalidBidErr.Context[ActualKey] = header.PrevRandao
 		return invalidBidErr, nil
 	}
 
@@ -336,13 +336,13 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 	blindedBeaconBlock := signedBlindedBeaconBlock.Message
 
 	// Verify signature first, to avoid doing unnecessary work in the event this is a "bad" transcript
-	proposerPublicKey, err := a.consensusClient.GetPublicKeyForIndex(ctx, blindedBeaconBlock.ProposerIndex)
+	proposerPublicKey, err := a.consensusClient.GetPublicKeyForIndex(ctx, uint64(blindedBeaconBlock.ProposerIndex))
 	if err != nil {
 		logger.Warnw("could not find public key for validator index", "error", err)
 		return
 	}
 
-	domain := a.consensusClient.SignatureDomain(blindedBeaconBlock.Slot)
+	domain := a.consensusClient.SignatureDomain(uint64(blindedBeaconBlock.Slot))
 	valid, err := crypto.VerifySignature(signedBlindedBeaconBlock.Message, domain, proposerPublicKey[:], signedBlindedBeaconBlock.Signature[:])
 	if err != nil {
 		logger.Warnw("error verifying signature from proposer; could not determine authenticity of transcript", "error", err, "bid", bid, "acceptance", signedBlindedBeaconBlock)
@@ -354,7 +354,7 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 	}
 
 	bidCtx := &types.BidContext{
-		Slot:              blindedBeaconBlock.Slot,
+		Slot:              uint64(blindedBeaconBlock.Slot),
 		ParentHash:        bid.Header.ParentHash,
 		ProposerPublicKey: *proposerPublicKey,
 		RelayPublicKey:    bid.Pubkey,
