@@ -1,6 +1,6 @@
 module github.com/ralexstokes/relay-monitor
 
-go 1.19
+go 1.20
 
 require (
 	github.com/ethereum/go-ethereum v1.12.0

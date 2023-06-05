@@ -136,7 +136,6 @@ func NewClient(ctx context.Context, endpoint string, logger *zap.Logger) (*Clien
 func (c *Client) SignatureDomainForBuilder() crypto.Domain {
 	if c.builderSignatureDomain == nil {
 		domain := crypto.Domain(crypto.ComputeDomain(crypto.DomainTypeAppBuilder, c.genesisForkVersion, types.Root{}))
-		c.logger.Sugar().Debugf("genesisForkVersion: %v", c.genesisForkVersion)
 		c.builderSignatureDomain = &domain
 	}
 	return *c.builderSignatureDomain
@@ -370,8 +369,8 @@ func (c *Client) FetchBlock(ctx context.Context, slot types.Slot) error {
 }
 
 type headEvent struct {
-	Slot  string     `json:"slot"`
-	Block types.Root `json:"block"`
+	Slot  string `json:"slot"`
+	Block string `json:"block"`
 }
 
 func (c *Client) StreamHeads(ctx context.Context) <-chan types.Coordinate {
@@ -383,6 +382,7 @@ func (c *Client) StreamHeads(ctx context.Context) <-chan types.Coordinate {
 		err := sseClient.SubscribeRawWithContext(ctx, func(msg *sse.Event) {
 			var event headEvent
 			err := json.Unmarshal(msg.Data, &event)
+			logger.Debugf("event: %v", event)
 			if err != nil {
 				logger.Warnf("could not unmarshal `head` node event: %v", err)
 				return
@@ -394,7 +394,7 @@ func (c *Client) StreamHeads(ctx context.Context) <-chan types.Coordinate {
 			}
 			head := types.Coordinate{
 				Slot: types.Slot(slot),
-				Root: event.Block,
+				Root: types.Root([]byte(event.Block)),
 			}
 			ch <- head
 		})
