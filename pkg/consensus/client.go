@@ -382,7 +382,6 @@ func (c *Client) StreamHeads(ctx context.Context) <-chan types.Coordinate {
 		err := sseClient.SubscribeRawWithContext(ctx, func(msg *sse.Event) {
 			var event headEvent
 			err := json.Unmarshal(msg.Data, &event)
-			logger.Debugf("event: %v", event)
 			if err != nil {
 				logger.Warnf("could not unmarshal `head` node event: %v", err)
 				return
