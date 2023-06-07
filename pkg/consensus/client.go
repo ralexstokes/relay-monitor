@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common/math"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/holiman/uint256"
@@ -54,7 +55,7 @@ type Client struct {
 	SecondsPerSlot        uint64
 	GenesisTime           uint64
 	genesisForkVersion    types.ForkVersion
-	GenesisValidatorsRoot types.Root
+	GenesisValidatorsRoot common.Root
 	altairForkVersion     types.ForkVersion
 	altairForkEpoch       types.Epoch
 	bellatrixForkVersion  types.ForkVersion
@@ -142,7 +143,7 @@ func (c *Client) SignatureDomainForBuilder() crypto.Domain {
 
 func (c *Client) SignatureDomain(slot types.Slot) crypto.Domain {
 	forkVersion := c.GetForkVersion(slot)
-	return crypto.ComputeDomain(crypto.DomainTypeBeaconProposer, forkVersion, c.GenesisValidatorsRoot)
+	return crypto.ComputeDomain(crypto.DomainTypeBeaconProposer, forkVersion, phase0.Root(c.GenesisValidatorsRoot))
 }
 
 func (c *Client) LoadCurrentContext(ctx context.Context, currentSlot types.Slot, currentEpoch types.Epoch) error {
@@ -186,7 +187,8 @@ func (c *Client) FetchGenesis(ctx context.Context) error {
 
 	c.GenesisTime = uint64(resp.GenesisTime)
 	c.genesisForkVersion = types.ForkVersion(resp.GenesisForkVersion)
-	c.GenesisValidatorsRoot = types.Hash(resp.GenesisValidatorsRoot)
+	// c.GenesisValidatorsRoot = types.Hash(resp.GenesisValidatorsRoot)
+	c.GenesisValidatorsRoot = resp.GenesisValidatorsRoot
 	return nil
 }
 
@@ -367,8 +369,8 @@ func (c *Client) FetchBlock(ctx context.Context, slot types.Slot) error {
 }
 
 type headEvent struct {
-	Slot  string     `json:"slot"`
-	Block types.Root `json:"block"`
+	Slot  string `json:"slot"`
+	Block string `json:"block"`
 }
 
 func (c *Client) StreamHeads(ctx context.Context) <-chan types.Coordinate {
@@ -391,7 +393,7 @@ func (c *Client) StreamHeads(ctx context.Context) <-chan types.Coordinate {
 			}
 			head := types.Coordinate{
 				Slot: types.Slot(slot),
-				Root: event.Block,
+				Root: types.Root([]byte(event.Block)),
 			}
 			ch <- head
 		})

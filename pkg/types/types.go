@@ -3,22 +3,26 @@ package types
 import (
 	"fmt"
 
-	"github.com/flashbots/go-boost-utils/types"
+	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
+	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
+	consensusapiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/holiman/uint256"
 )
 
 type (
 	Slot                        = uint64
 	Epoch                       = uint64
-	ForkVersion                 = types.ForkVersion
 	Uint256                     = uint256.Int
-	PublicKey                   = types.PublicKey
-	Hash                        = types.Hash
-	Bid                         = types.SignedBuilderBid
-	Root                        = types.Root
+	Hash                        = phase0.Hash32
+	Bid                         = builderApiCapella.SignedBuilderBid
+	PublicKey                   = phase0.BLSPubKey
+	Root                        = phase0.Root
+	ForkVersion                 = phase0.Version
 	ValidatorIndex              = uint64
-	SignedValidatorRegistration = types.SignedValidatorRegistration
-	SignedBlindedBeaconBlock    = types.SignedBlindedBeaconBlock
+	SignedValidatorRegistration = builderApiV1.SignedValidatorRegistration
+	SignedBlindedBeaconBlock    = consensusapiv1capella.SignedBlindedBeaconBlock
 )
 
 type Coordinate struct {
@@ -27,8 +31,8 @@ type Coordinate struct {
 }
 
 type AuctionTranscript struct {
-	Bid        Bid                            `json:"bid"`
-	Acceptance types.SignedBlindedBeaconBlock `json:"acceptance"`
+	Bid        Bid                                            `json:"bid"`
+	Acceptance consensusapiv1capella.SignedBlindedBeaconBlock `json:"acceptance"`
 }
 
 type BidContext struct {
@@ -57,4 +61,30 @@ type ClientError struct {
 
 func (e *ClientError) Error() string {
 	return fmt.Sprintf("Type: %s Code: %d Message: %s", e.Type, e.Code, e.Message)
+}
+
+type GetHeaderResponse struct {
+	Version string
+	Data    *builderApiCapella.SignedBuilderBid
+}
+
+var (
+	ErrLength = fmt.Errorf("incorrect byte length")
+	ErrSign   = fmt.Errorf("negative value casted as unsigned int")
+)
+
+func FromSlice(x []byte, p *PublicKey) error {
+	if len(x) != 48 {
+		return ErrLength
+	}
+	copy(p[:], x)
+	return nil
+}
+
+func UnmarshalText(input []byte, p *PublicKey) error {
+	b := hexutil.Bytes(p[:])
+	if err := b.UnmarshalText(input); err != nil {
+		return err
+	}
+	return FromSlice(b, p)
 }
