@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"time"
 
+	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/ralexstokes/relay-monitor/pkg/metrics"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
@@ -39,7 +40,7 @@ func NewClient(endpoint string, logger *zap.SugaredLogger) (*Client, error) {
 
 	publicKeyStr := u.User.Username()
 	var publicKey types.PublicKey
-	err = types.UnmarshalText([]byte(publicKeyStr), &publicKey)
+	err = publicKey.UnmarshalText([]byte(publicKeyStr))
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +110,7 @@ func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.
 		return nil, uint64(duration), &types.ClientError{Type: types.RelayError, Code: resp.StatusCode, Message: errorMsg.Message}
 	}
 
-	var bid types.GetHeaderResponse
+	var bid boostTypes.GetHeaderResponse
 	err = json.NewDecoder(resp.Body).Decode(&bid)
 	if err != nil {
 		return bid.Data, uint64(duration), &types.ClientError{Type: types.RelayError, Code: 500, Message: err.Error()}
