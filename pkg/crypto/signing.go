@@ -1,15 +1,12 @@
 package crypto
 
-import (
-	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/flashbots/go-boost-utils/ssz"
-)
+import "github.com/flashbots/go-boost-utils/types"
 
 var (
-	VerifySignature          = ssz.VerifySignature
-	DomainTypeAppBuilder     = ssz.DomainTypeAppBuilder
-	DomainTypeBeaconProposer = ssz.DomainTypeBeaconProposer
-	ComputeDomain            = ssz.ComputeDomain
+	VerifySignature          = types.VerifySignature
+	DomainTypeAppBuilder     = types.DomainTypeAppBuilder
+	DomainTypeBeaconProposer = types.DomainTypeBeaconProposer
+	ComputeDomain            = types.ComputeDomain
 )
 
-type Domain = phase0.Domain
+type Domain = types.Domain
