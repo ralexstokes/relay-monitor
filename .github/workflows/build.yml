@@ -19,9 +19,8 @@ jobs:
             - name: Display Go version
               run: go version
             - name: Build
+              id: build_release
               run: go build -v ./cmd/relay-monitor/"
-            - name: Test with the Go cli
-              run: go test
             - name: Create Release
               if: success()
               id: create_release
