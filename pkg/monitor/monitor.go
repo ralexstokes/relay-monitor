@@ -10,6 +10,7 @@ import (
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
 	"github.com/ralexstokes/relay-monitor/pkg/data"
+	"github.com/ralexstokes/relay-monitor/pkg/output"
 	"github.com/ralexstokes/relay-monitor/pkg/store"
 	"go.uber.org/zap"
 )
@@ -22,12 +23,13 @@ type Monitor struct {
 	api       *api.Server
 	collector *data.Collector
 	analyzer  *analysis.Analyzer
+	output    *output.FileOutput
 }
 
 func parseRelaysFromEndpoint(logger *zap.SugaredLogger, relayEndpoints []string) []*builder.Client {
 	var relays []*builder.Client
 	for _, endpoint := range relayEndpoints {
-		relay, err := builder.NewClient(endpoint)
+		relay, err := builder.NewClient(endpoint, logger)
 		if err != nil {
 			logger.Warnf("could not instantiate relay at %s: %v", endpoint, err)
 			continue
@@ -50,6 +52,11 @@ func parseRelaysFromEndpoint(logger *zap.SugaredLogger, relayEndpoints []string)
 func New(ctx context.Context, config *Config, zapLogger *zap.Logger) (*Monitor, error) {
 	logger := zapLogger.Sugar()
 
+	fileOutput, err := output.NewFileOutput(config.Output.Path)
+	if err != nil {
+		return nil, fmt.Errorf("could not create output file: %v", err)
+	}
+
 	relays := parseRelaysFromEndpoint(logger, config.Relays)
 
 	consensusClient, err := consensus.NewClient(ctx, config.Consensus.Endpoint, zapLogger)
@@ -68,9 +75,9 @@ func New(ctx context.Context, config *Config, zapLogger *zap.Logger) (*Monitor, 
 	}
 
 	events := make(chan data.Event, eventBufferSize)
-	collector := data.NewCollector(zapLogger, relays, clock, consensusClient, events)
+	collector := data.NewCollector(zapLogger, relays, clock, consensusClient, fileOutput, config.Region, events)
 	store := store.NewMemoryStore()
-	analyzer := analysis.NewAnalyzer(zapLogger, relays, events, store, consensusClient, clock)
+	analyzer := analysis.NewAnalyzer(zapLogger, relays, events, store, consensusClient, clock, fileOutput, config.Region)
 
 	apiServer := api.New(config.Api, zapLogger, analyzer, events, clock, store, consensusClient)
 	return &Monitor{
@@ -78,6 +85,7 @@ func New(ctx context.Context, config *Config, zapLogger *zap.Logger) (*Monitor, 
 		api:       apiServer,
 		collector: collector,
 		analyzer:  analyzer,
+		output:    fileOutput,
 	}, nil
 }
 
@@ -101,4 +109,11 @@ func (s *Monitor) Run(ctx context.Context) {
 	if err != nil {
 		logger.Warn("error running API server: %v", err)
 	}
+}
+
+func (s *Monitor) Stop() {
+	logger := s.logger.Sugar()
+	logger.Info("Shutting down monitor...")
+
+	s.output.Close()
 }

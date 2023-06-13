@@ -3,6 +3,7 @@ package consensus
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -14,14 +15,16 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/holiman/uint256"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/protolambda/eth2api"
 	"github.com/protolambda/eth2api/client/beaconapi"
 	"github.com/protolambda/eth2api/client/configapi"
 	"github.com/protolambda/eth2api/client/validatorapi"
-	"github.com/protolambda/zrnt/eth2/beacon/bellatrix"
+	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/r3labs/sse/v2"
 	"github.com/ralexstokes/relay-monitor/pkg/crypto"
+	"github.com/ralexstokes/relay-monitor/pkg/metrics"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 	"go.uber.org/zap"
 )
@@ -56,6 +59,8 @@ type Client struct {
 	altairForkEpoch       types.Epoch
 	bellatrixForkVersion  types.ForkVersion
 	bellatrixForkEpoch    types.Epoch
+	capellaForkVersion    types.ForkVersion
+	capellaForkEpoch      types.Epoch
 
 	builderSignatureDomain *crypto.Domain
 
@@ -112,7 +117,7 @@ func NewClient(ctx context.Context, endpoint string, logger *zap.Logger) (*Clien
 		validatorIndexCache:    validatorIndexCache,
 	}
 
-	err = client.fetchGenesis(ctx)
+	err = client.FetchGenesis(ctx)
 	if err != nil {
 		logger := client.logger.Sugar()
 		logger.Fatalf("could not load genesis info: %v", err)
@@ -169,7 +174,7 @@ func (c *Client) LoadCurrentContext(ctx context.Context, currentSlot types.Slot,
 	return nil
 }
 
-func (c *Client) fetchGenesis(ctx context.Context) error {
+func (c *Client) FetchGenesis(ctx context.Context) error {
 	var resp eth2api.GenesisResponse
 	exists, err := beaconapi.Genesis(ctx, c.client, &resp)
 	if !exists {
@@ -198,13 +203,17 @@ func (c *Client) fetchSpec(ctx context.Context) error {
 	c.altairForkEpoch = types.Epoch(spec.Config.ALTAIR_FORK_EPOCH)
 	c.bellatrixForkVersion = types.ForkVersion(spec.Config.BELLATRIX_FORK_VERSION)
 	c.bellatrixForkEpoch = types.Epoch(spec.Config.BELLATRIX_FORK_EPOCH)
+	c.capellaForkVersion = types.ForkVersion(spec.Config.CAPELLA_FORK_VERSION)
+	c.capellaForkEpoch = types.Epoch(spec.Config.CAPELLA_FORK_EPOCH)
 	return nil
 }
 
 // NOTE: this assumes the fork schedule is presented in ascending order
 func (c *Client) GetForkVersion(slot types.Slot) types.ForkVersion {
 	epoch := slot / c.SlotsPerEpoch
-	if epoch >= c.bellatrixForkEpoch {
+	if epoch >= c.capellaForkEpoch {
+		return c.capellaForkVersion
+	} else if epoch >= c.bellatrixForkEpoch {
 		return c.bellatrixForkVersion
 	} else if epoch >= c.altairForkEpoch {
 		return c.altairForkVersion
@@ -225,7 +234,7 @@ func (c *Client) GetProposer(slot types.Slot) (*ValidatorInfo, error) {
 	return &validator, nil
 }
 
-func (c *Client) GetBlock(slot types.Slot) (*bellatrix.SignedBeaconBlock, error) {
+func (c *Client) GetBlock(slot types.Slot) (*capella.SignedBeaconBlock, error) {
 	val, ok := c.blockCache.Get(slot)
 	if !ok {
 		// TODO pipe in context
@@ -238,7 +247,7 @@ func (c *Client) GetBlock(slot types.Slot) (*bellatrix.SignedBeaconBlock, error)
 			return nil, fmt.Errorf("could not find block for slot %d", slot)
 		}
 	}
-	block, ok := val.(*bellatrix.SignedBeaconBlock)
+	block, ok := val.(*capella.SignedBeaconBlock)
 	if !ok {
 		return nil, fmt.Errorf("internal: block cache contains an unexpected value %v with type %T", val, val)
 	}
@@ -257,6 +266,10 @@ func (c *Client) GetValidator(publicKey *types.PublicKey) (*eth2api.ValidatorRes
 }
 
 func (c *Client) GetParentHash(ctx context.Context, slot types.Slot) (types.Hash, error) {
+
+	t := prometheus.NewTimer(metrics.GetParentHash)
+	defer t.ObserveDuration()
+
 	targetSlot := slot - 1
 	block, err := c.GetBlock(targetSlot)
 	if err != nil {
@@ -266,6 +279,10 @@ func (c *Client) GetParentHash(ctx context.Context, slot types.Slot) (types.Hash
 }
 
 func (c *Client) GetProposerPublicKey(ctx context.Context, slot types.Slot) (*types.PublicKey, error) {
+
+	t := prometheus.NewTimer(metrics.GetProposerPubKey)
+	defer t.ObserveDuration()
+
 	validator, err := c.GetProposer(slot)
 	if err != nil {
 		// TODO consider fallback to grab the assignments for the missing epoch...
@@ -294,26 +311,58 @@ func (c *Client) FetchProposers(ctx context.Context, epoch types.Epoch) error {
 	return nil
 }
 
+func (c *Client) FetchBlockRequest(ctx context.Context, slot types.Slot, dest *eth2api.VersionedSignedBeaconBlock) (bool, error) {
+	blockID := eth2api.BlockIdSlot(slot)
+	exists, err := beaconapi.BlockV2(ctx, c.client, blockID, dest)
+	return exists, err
+}
+
+func (c *Client) RetryBlockRequest(ctx context.Context, slot types.Slot, dest *eth2api.VersionedSignedBeaconBlock) error {
+	// Retry previous slot 5 times
+	logger := c.logger.Sugar()
+	for i := 1; i < 5; i++ {
+		logger.Warnf("could not find slot: %d. Retrying in %ds. Attempt %d", slot, i)
+		// Sleep and then retry in case it was a Node issue
+		time.Sleep(time.Duration(i) * time.Second)
+		exists, err := c.FetchBlockRequest(ctx, slot, dest)
+		if exists && err == nil {
+			return err
+		}
+	}
+	// Try 3 previous slots
+	for i := 1; i < 4; i++ {
+		targetSlot := slot - uint64(i)
+		logger.Warnf("could not find slot: %d. Retrying with previous slot %d", slot, targetSlot)
+		exists, err := c.FetchBlockRequest(ctx, targetSlot, dest)
+		if exists && err == nil {
+			return err
+		}
+	}
+	logger.Errorf("all block requests have failed starting at slot %d", slot)
+	return errors.New("all block requests have failed")
+}
+
 func (c *Client) FetchBlock(ctx context.Context, slot types.Slot) error {
 	// TODO handle reorgs, etc.
-	blockID := eth2api.BlockIdSlot(slot)
-
 	var signedBeaconBlock eth2api.VersionedSignedBeaconBlock
-	exists, err := beaconapi.BlockV2(ctx, c.client, blockID, &signedBeaconBlock)
+	exists, err := c.FetchBlockRequest(ctx, slot, &signedBeaconBlock)
 	// NOTE: need to check `exists` first...
 	if !exists {
-		return nil
+		err := c.RetryBlockRequest(ctx, slot, &signedBeaconBlock)
+		if err != nil {
+			return err
+		}
 	} else if err != nil {
 		return err
 	}
 
-	bellatrixBlock, ok := signedBeaconBlock.Data.(*bellatrix.SignedBeaconBlock)
+	capellaBlock, ok := signedBeaconBlock.Data.(*capella.SignedBeaconBlock)
 	if !ok {
 		return fmt.Errorf("could not parse block %s", signedBeaconBlock)
 	}
 
-	c.blockCache.Add(slot, bellatrixBlock)
-	c.blockNumberToSlotIndex.Add(uint64(bellatrixBlock.Message.Body.ExecutionPayload.BlockNumber), slot)
+	c.blockCache.Add(slot, capellaBlock)
+	c.blockNumberToSlotIndex.Add(uint64(capellaBlock.Message.Body.ExecutionPayload.BlockNumber), slot)
 	return nil
 }
 
