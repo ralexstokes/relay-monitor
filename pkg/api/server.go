@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/ralexstokes/relay-monitor/pkg/analysis"
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
 	"github.com/ralexstokes/relay-monitor/pkg/crypto"
@@ -23,6 +24,9 @@ const (
 	GetFaultEndpoint                = "/monitor/v1/faults"
 	RegisterValidatorEndpoint       = "/eth/v1/builder/validators"
 	PostAuctionTranscriptEndpoint   = "/monitor/v1/transcript"
+	MetricsEndpoint                 = "/metrics"
+	AliveEndpoint                   = "/alive"
+	ReadyEndpoint                   = "/ready"
 	DefaultEpochSpanForFaultsWindow = 256
 )
 
@@ -312,6 +316,23 @@ func (s *Server) handleAuctionTranscript(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 }
 
+func (s *Server) handleAlive(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	err := s.consensusClient.FetchGenesis(ctx)
+	if err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func (s *Server) Run(ctx context.Context) error {
 	logger := s.logger.Sugar()
 	host := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
@@ -322,6 +343,9 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc(GetFaultEndpoint, get(s.handleFaultsRequest))
 	mux.HandleFunc(RegisterValidatorEndpoint, post(s.handleRegisterValidator))
 	mux.HandleFunc(PostAuctionTranscriptEndpoint, post(s.handleAuctionTranscript))
+	mux.HandleFunc(MetricsEndpoint, get(promhttp.Handler().ServeHTTP))
+	mux.HandleFunc(AliveEndpoint, get(s.handleAlive))
+	mux.HandleFunc(ReadyEndpoint, get(s.handleReady))
 	return http.ListenAndServe(host, mux)
 }
 
