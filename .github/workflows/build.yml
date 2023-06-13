@@ -22,7 +22,7 @@ jobs:
               run: go version
             - name: Build
               id: build_release
-              run: go build -v ./cmd/relay-monitor/"
+              run: go build -v ./cmd/relay-monitor/
             - name: Create Release
               if: success()
               id: create_release
