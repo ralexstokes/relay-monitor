@@ -22,7 +22,7 @@ jobs:
             - name: Build
               id: build_release
               run: go build -v ./cmd/relay-monitor/
-            - name: Create ankiaddon
+            - name: Create zip asset
               run: zip -r -q relay-monitor.zip ./relay-monitor/relay-monitor
             - name: Create Release
               if: success()
