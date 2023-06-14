@@ -22,6 +22,8 @@ jobs:
             - name: Build
               id: build_release
               run: go build -v ./cmd/relay-monitor/
+            - name: Create ankiaddon
+              run: zip -r -q relay-monitor.zip ./relay-monitor/relay-monitor
             - name: Create Release
               if: success()
               id: create_release
@@ -33,3 +35,13 @@ jobs:
                 release_name: ${{ github.ref }}
                 body: Release ${{ github.ref }}
                 draft: false
+            - name: Upload Release Asset
+              id: upload-release-asset 
+              uses: actions/upload-release-asset@v1
+              env:
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+                asset_path: ./relay-monitor.zip
+                asset_name: relay-monitor.zip
+                asset_content_type: application/zip
