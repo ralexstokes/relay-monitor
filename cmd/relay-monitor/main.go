@@ -16,7 +16,7 @@ import (
 
 var (
 	configFile          = flag.String("config", "config.example.yaml", "path to config file")
-	defaultKafkaTimeout = time.Second * 5
+	defaultKafkaTimeout = time.Second * 10
 )
 
 func main() {
