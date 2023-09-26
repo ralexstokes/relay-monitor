@@ -36,8 +36,9 @@ func NewFileOutput(filePath string, kafkaConfig *KafkaConfig) (*Output, error) {
 	}
 
 	output := &Output{
-		Path: filePath,
-		f:    f,
+		Path:  filePath,
+		f:     f,
+		kConf: kafkaConfig,
 	}
 
 	// check and prepare kafka producer

@@ -15,6 +15,6 @@ output:
   path: "out.json"
 region: local
 kafka:
-  topic: "eth_relay_monitor"
+  topic: "eth_relay_monitor_bids"
   bootstrap_servers: "kafka:9092"
   timeout: 10s
