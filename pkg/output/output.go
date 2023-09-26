@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
 	kafka "github.com/segmentio/kafka-go"
 )
@@ -42,10 +43,12 @@ func NewFileOutput(filePath string, kafkaConfig *KafkaConfig) (*Output, error) {
 	// check and prepare kafka producer
 	if kafkaConfig != nil {
 		output.kafkaWriter = &kafka.Writer{
-			Addr:       kafka.TCP(kafkaConfig.BootstrapServers...),
-			Topic:      kafkaConfig.Topic,
-			BatchBytes: 10 * 1024 * 1024, // 10MB
-			BatchSize:  1,
+			Addr:         kafka.TCP(kafkaConfig.BootstrapServers...),
+			Topic:        kafkaConfig.Topic,
+			BatchBytes:   10 * 1024 * 1024, // 10MB
+			BatchSize:    20,
+			BatchTimeout: time.Second,
+			RequiredAcks: 1,
 		}
 	}
 

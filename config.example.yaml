@@ -12,5 +12,9 @@ api:
   host: "0.0.0.0"
   port: 8080
 output:
-  path: "/data/relay/out.json"
+  path: "out.json"
 region: local
+kafka:
+  topic: "eth_relay_monitor"
+  bootstrap_servers: "kafka:9092"
+  timeout: 10s
