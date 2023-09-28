@@ -5,6 +5,8 @@ import (
 	"flag"
 	"log"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/ralexstokes/relay-monitor/pkg/monitor"
 	"go.uber.org/zap"
@@ -12,7 +14,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var configFile = flag.String("config", "config.example.yaml", "path to config file")
+var (
+	configFile          = flag.String("config", "config.example.yaml", "path to config file")
+	defaultKafkaTimeout = time.Second * 10
+)
 
 func main() {
 	flag.Parse()
@@ -26,6 +31,7 @@ func main() {
 	}
 
 	logger := zapLogger.Sugar()
+	zap.ReplaceGlobals(zapLogger)
 
 	data, err := os.ReadFile(*configFile)
 	if err != nil {
@@ -36,6 +42,14 @@ func main() {
 	err = yaml.Unmarshal(data, config)
 	if err != nil {
 		logger.Fatalf("could not load config: %v", err)
+	}
+
+	// parse bootstrap servers as CSV
+	if config.Kafka != nil {
+		config.Kafka.BootstrapServers = strings.Split(config.Kafka.BootstrapServersStr, ",")
+		if config.Kafka.Timeout == 0 {
+			config.Kafka.Timeout = defaultKafkaTimeout
+		}
 	}
 
 	ctx := context.Background()

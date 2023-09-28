@@ -18,11 +18,12 @@ type Collector struct {
 	clock           *consensus.Clock
 	consensusClient *consensus.Client
 	events          chan<- Event
-	output          *output.FileOutput
+	output          *output.Output
 	region          string
+	timeout         time.Duration
 }
 
-func NewCollector(zapLogger *zap.Logger, relays []*builder.Client, clock *consensus.Clock, consensusClient *consensus.Client, output *output.FileOutput, region string, events chan<- Event) *Collector {
+func NewCollector(zapLogger *zap.Logger, relays []*builder.Client, clock *consensus.Clock, consensusClient *consensus.Client, output *output.Output, region string, timeout time.Duration, events chan<- Event) *Collector {
 	return &Collector{
 		logger:          zapLogger,
 		relays:          relays,
@@ -31,6 +32,7 @@ func NewCollector(zapLogger *zap.Logger, relays []*builder.Client, clock *consen
 		events:          events,
 		output:          output,
 		region:          region,
+		timeout:         timeout,
 	}
 }
 
@@ -50,13 +52,14 @@ func (c *Collector) outputBid(event *BidEvent, duration *uint64, relay *builder.
 		outBytes, err := json.Marshal(out)
 		if err != nil {
 			logger.Warnw("unable to marshal outout", "error", err, "content", out)
-		} else {
-			outBytes = append(outBytes, []byte("\n")...)
-			err = c.output.WriteEntry(outBytes)
-			if err != nil {
-				logger.Warnw("unable to write output", "error", err)
-			}
 		}
+		ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+		defer cancel()
+		err = c.output.WriteEntry(ctx, outBytes)
+		if err != nil {
+			logger.Warnw("unable to write output", "error", err)
+		}
+
 	}()
 }
 

@@ -38,11 +38,13 @@ type Analyzer struct {
 	faults     FaultRecord
 	faultsLock sync.Mutex
 
-	output *output.FileOutput
+	output *output.Output
 	region string
+
+	timeout time.Duration
 }
 
-func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan data.Event, store store.Storer, consensusClient *consensus.Client, clock *consensus.Clock, output *output.FileOutput, region string) *Analyzer {
+func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan data.Event, store store.Storer, consensusClient *consensus.Client, clock *consensus.Clock, output *output.Output, region string, timeout time.Duration) *Analyzer {
 	faults := make(FaultRecord)
 	for _, relay := range relays {
 		faults[relay.PublicKey] = &Faults{}
@@ -56,6 +58,7 @@ func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan dat
 		faults:          faults,
 		output:          output,
 		region:          region,
+		timeout:         timeout,
 	}
 }
 
@@ -139,13 +142,14 @@ func (a *Analyzer) outputValidationError(validationError *InvalidBid) {
 		outBytes, err := json.Marshal(out)
 		if err != nil {
 			logger.Warnw("unable to marshal output", "error", err, "content", out)
-		} else {
-			outBytes = append(outBytes, []byte("\n")...)
-			err = a.output.WriteEntry(outBytes)
-			if err != nil {
-				logger.Warnw("unable to write output", "error", err)
-			}
 		}
+		ctx, cancel := context.WithTimeout(context.Background(), a.timeout)
+		defer cancel()
+		err = a.output.WriteEntry(ctx, outBytes)
+		if err != nil {
+			logger.Warnw("unable to write output", "error", err)
+		}
+
 	}()
 }
 

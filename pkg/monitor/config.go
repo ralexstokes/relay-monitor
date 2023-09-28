@@ -1,6 +1,8 @@
 package monitor
 
 import (
+	"time"
+
 	"github.com/ralexstokes/relay-monitor/pkg/api"
 )
 
@@ -16,6 +18,13 @@ type OutputConfig struct {
 	Path string `yaml:"path"`
 }
 
+type KafkaConfig struct {
+	Topic               string        `yaml:"topic"`
+	BootstrapServersStr string        `yaml:"bootstrap_servers"`
+	BootstrapServers    []string      `yaml:"-"`
+	Timeout             time.Duration `yaml:"timeout"`
+}
+
 type Config struct {
 	Network   *NetworkConfig   `yaml:"network"`
 	Consensus *ConsensusConfig `yaml:"consensus"`
@@ -23,4 +32,5 @@ type Config struct {
 	Api       *api.Config      `yaml:"api"`
 	Output    *OutputConfig    `yaml:"output"`
 	Region    string           `yaml:"region"`
+	Kafka     *KafkaConfig     `yaml:"kafka"`
 }

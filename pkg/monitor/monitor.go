@@ -23,7 +23,7 @@ type Monitor struct {
 	api       *api.Server
 	collector *data.Collector
 	analyzer  *analysis.Analyzer
-	output    *output.FileOutput
+	output    *output.Output
 }
 
 func parseRelaysFromEndpoint(logger *zap.SugaredLogger, relayEndpoints []string) []*builder.Client {
@@ -52,7 +52,7 @@ func parseRelaysFromEndpoint(logger *zap.SugaredLogger, relayEndpoints []string)
 func New(ctx context.Context, config *Config, zapLogger *zap.Logger) (*Monitor, error) {
 	logger := zapLogger.Sugar()
 
-	fileOutput, err := output.NewFileOutput(config.Output.Path)
+	fileOutput, err := output.NewFileOutput(config.Output.Path, &output.KafkaConfig{BootstrapServers: config.Kafka.BootstrapServers, Topic: config.Kafka.Topic})
 	if err != nil {
 		return nil, fmt.Errorf("could not create output file: %v", err)
 	}
@@ -75,9 +75,9 @@ func New(ctx context.Context, config *Config, zapLogger *zap.Logger) (*Monitor, 
 	}
 
 	events := make(chan data.Event, eventBufferSize)
-	collector := data.NewCollector(zapLogger, relays, clock, consensusClient, fileOutput, config.Region, events)
+	collector := data.NewCollector(zapLogger, relays, clock, consensusClient, fileOutput, config.Region, config.Kafka.Timeout, events)
 	store := store.NewMemoryStore()
-	analyzer := analysis.NewAnalyzer(zapLogger, relays, events, store, consensusClient, clock, fileOutput, config.Region)
+	analyzer := analysis.NewAnalyzer(zapLogger, relays, events, store, consensusClient, clock, fileOutput, config.Region, config.Kafka.Timeout)
 
 	apiServer := api.New(config.Api, zapLogger, analyzer, events, clock, store, consensusClient)
 	return &Monitor{
