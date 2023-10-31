@@ -52,7 +52,14 @@ func parseRelaysFromEndpoint(logger *zap.SugaredLogger, relayEndpoints []string)
 func New(ctx context.Context, config *Config, zapLogger *zap.Logger) (*Monitor, error) {
 	logger := zapLogger.Sugar()
 
-	fileOutput, err := output.NewFileOutput(config.Output.Path, &output.KafkaConfig{BootstrapServers: config.Kafka.BootstrapServers, Topic: config.Kafka.Topic})
+	var kafkaConfig *output.KafkaConfig
+	if config.Kafka != nil {
+		kafkaConfig = &output.KafkaConfig{BootstrapServers: config.Kafka.BootstrapServers, Topic: config.Kafka.Topic}
+	} else {
+		logger.Warn("no kafka configuration found, no kafka output will be used")
+	}
+
+	fileOutput, err := output.NewFileOutput(config.Output.Path, kafkaConfig)
 	if err != nil {
 		return nil, fmt.Errorf("could not create output file: %v", err)
 	}
