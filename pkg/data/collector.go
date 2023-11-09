@@ -20,10 +20,9 @@ type Collector struct {
 	events          chan<- Event
 	output          *output.Output
 	region          string
-	timeout         time.Duration
 }
 
-func NewCollector(zapLogger *zap.Logger, relays []*builder.Client, clock *consensus.Clock, consensusClient *consensus.Client, output *output.Output, region string, timeout time.Duration, events chan<- Event) *Collector {
+func NewCollector(zapLogger *zap.Logger, relays []*builder.Client, clock *consensus.Clock, consensusClient *consensus.Client, output *output.Output, region string, events chan<- Event) *Collector {
 	return &Collector{
 		logger:          zapLogger,
 		relays:          relays,
@@ -32,7 +31,6 @@ func NewCollector(zapLogger *zap.Logger, relays []*builder.Client, clock *consen
 		events:          events,
 		output:          output,
 		region:          region,
-		timeout:         timeout,
 	}
 }
 
@@ -53,9 +51,7 @@ func (c *Collector) outputBid(event *BidEvent, duration *uint64, relay *builder.
 		if err != nil {
 			logger.Warnw("unable to marshal outout", "error", err, "content", out)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
-		defer cancel()
-		err = c.output.WriteEntry(ctx, outBytes)
+		err = c.output.WriteEntry(outBytes)
 		if err != nil {
 			logger.Warnw("unable to write output", "error", err)
 		}
@@ -169,28 +165,28 @@ func (c *Collector) syncProposers(ctx context.Context) {
 	}
 }
 
-func (c *Collector) syncValidators(ctx context.Context) {
-	logger := c.logger.Sugar()
+// func (c *Collector) syncValidators(ctx context.Context) {
+// 	logger := c.logger.Sugar()
 
-	epochs := c.clock.TickEpochs(ctx)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case epoch := <-epochs:
-			err := c.consensusClient.FetchValidators(ctx)
-			if err != nil {
-				logger.Warnf("could not load validators in epoch %d: %v", epoch, err)
-			}
-		}
-	}
-}
+// 	epochs := c.clock.TickEpochs(ctx)
+// 	for {
+// 		select {
+// 		case <-ctx.Done():
+// 			return
+// 		case epoch := <-epochs:
+// 			err := c.consensusClient.FetchValidators(ctx)
+// 			if err != nil {
+// 				logger.Warnf("could not load validators in epoch %d: %v", epoch, err)
+// 			}
+// 		}
+// 	}
+// }
 
 // TODO refactor this into a separate component as the list of duties is growing outside the "collector" abstraction
 func (c *Collector) collectConsensusData(ctx context.Context) {
 	go c.syncBlocks(ctx)
 	go c.syncProposers(ctx)
-	go c.syncValidators(ctx)
+	// go c.syncValidators(ctx)
 }
 
 func (c *Collector) Run(ctx context.Context) error {

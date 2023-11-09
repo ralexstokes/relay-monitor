@@ -8,6 +8,7 @@ import (
 	"github.com/ralexstokes/relay-monitor/pkg/analysis"
 	"github.com/ralexstokes/relay-monitor/pkg/api"
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
+	"github.com/ralexstokes/relay-monitor/pkg/config"
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
 	"github.com/ralexstokes/relay-monitor/pkg/data"
 	"github.com/ralexstokes/relay-monitor/pkg/output"
@@ -49,44 +50,39 @@ func parseRelaysFromEndpoint(logger *zap.SugaredLogger, relayEndpoints []string)
 	return relays
 }
 
-func New(ctx context.Context, config *Config, zapLogger *zap.Logger) (*Monitor, error) {
+func New(ctx context.Context, appConf *config.Config, zapLogger *zap.Logger) (*Monitor, error) {
 	logger := zapLogger.Sugar()
 
-	var kafkaConfig *output.KafkaConfig
-	if config.Kafka != nil {
-		kafkaConfig = &output.KafkaConfig{BootstrapServers: config.Kafka.BootstrapServers, Topic: config.Kafka.Topic}
-	} else {
-		logger.Warn("no kafka configuration found, no kafka output will be used")
-	}
-
-	fileOutput, err := output.NewFileOutput(config.Output.Path, kafkaConfig)
+	fileOutput, err := output.NewFileOutput(appConf.Output.Path, appConf.Kafka)
 	if err != nil {
 		return nil, fmt.Errorf("could not create output file: %v", err)
 	}
 
-	relays := parseRelaysFromEndpoint(logger, config.Relays)
+	relays := parseRelaysFromEndpoint(logger, appConf.Relays)
 
-	consensusClient, err := consensus.NewClient(ctx, config.Consensus.Endpoint, zapLogger)
+	consensusClient, err := consensus.NewClient(ctx, appConf.Consensus.Endpoint, zapLogger)
 	if err != nil {
 		return nil, fmt.Errorf("could not instantiate consensus client: %v", err)
 	}
 
 	clock := consensus.NewClock(consensusClient.GenesisTime, consensusClient.SecondsPerSlot, consensusClient.SlotsPerEpoch)
 	now := time.Now().Unix()
-	currentSlot := clock.CurrentSlot(now)
+
+	// Start with the last slot for stability
+	currentSlot := clock.CurrentSlot(now) - 1
 	currentEpoch := clock.EpochForSlot(currentSlot)
 
 	err = consensusClient.LoadCurrentContext(ctx, currentSlot, currentEpoch)
 	if err != nil {
-		logger.Warn("could not load the current context from the consensus client")
+		logger.Panic("could not load the current context from the consensus client")
 	}
 
 	events := make(chan data.Event, eventBufferSize)
-	collector := data.NewCollector(zapLogger, relays, clock, consensusClient, fileOutput, config.Region, config.Kafka.Timeout, events)
+	collector := data.NewCollector(zapLogger, relays, clock, consensusClient, fileOutput, appConf.Region, events)
 	store := store.NewMemoryStore()
-	analyzer := analysis.NewAnalyzer(zapLogger, relays, events, store, consensusClient, clock, fileOutput, config.Region, config.Kafka.Timeout)
+	analyzer := analysis.NewAnalyzer(zapLogger, relays, events, store, consensusClient, clock, fileOutput, appConf.Region)
 
-	apiServer := api.New(config.Api, zapLogger, analyzer, events, clock, store, consensusClient)
+	apiServer := api.New(appConf.Api, zapLogger, analyzer, events, clock, store, consensusClient)
 	return &Monitor{
 		logger:    zapLogger,
 		api:       apiServer,

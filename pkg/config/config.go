@@ -1,9 +1,7 @@
-package monitor
+package config
 
 import (
 	"time"
-
-	"github.com/ralexstokes/relay-monitor/pkg/api"
 )
 
 type NetworkConfig struct {
@@ -25,11 +23,16 @@ type KafkaConfig struct {
 	Timeout             time.Duration `yaml:"timeout"`
 }
 
+type ApiConfig struct {
+	Host string `yaml:"host"`
+	Port uint16 `yaml:"port"`
+}
+
 type Config struct {
 	Network   *NetworkConfig   `yaml:"network"`
 	Consensus *ConsensusConfig `yaml:"consensus"`
 	Relays    []string         `yaml:"relays"`
-	Api       *api.Config      `yaml:"api"`
+	Api       *ApiConfig       `yaml:"api"`
 	Output    *OutputConfig    `yaml:"output"`
 	Region    string           `yaml:"region"`
 	Kafka     *KafkaConfig     `yaml:"kafka"`

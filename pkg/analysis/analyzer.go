@@ -40,11 +40,9 @@ type Analyzer struct {
 
 	output *output.Output
 	region string
-
-	timeout time.Duration
 }
 
-func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan data.Event, store store.Storer, consensusClient *consensus.Client, clock *consensus.Clock, output *output.Output, region string, timeout time.Duration) *Analyzer {
+func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan data.Event, store store.Storer, consensusClient *consensus.Client, clock *consensus.Clock, output *output.Output, region string) *Analyzer {
 	faults := make(FaultRecord)
 	for _, relay := range relays {
 		faults[relay.PublicKey] = &Faults{}
@@ -58,7 +56,6 @@ func NewAnalyzer(logger *zap.Logger, relays []*builder.Client, events <-chan dat
 		faults:          faults,
 		output:          output,
 		region:          region,
-		timeout:         timeout,
 	}
 }
 
@@ -143,9 +140,7 @@ func (a *Analyzer) outputValidationError(validationError *InvalidBid) {
 		if err != nil {
 			logger.Warnw("unable to marshal output", "error", err, "content", out)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), a.timeout)
-		defer cancel()
-		err = a.output.WriteEntry(ctx, outBytes)
+		err = a.output.WriteEntry(outBytes)
 		if err != nil {
 			logger.Warnw("unable to write output", "error", err)
 		}

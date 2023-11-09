@@ -3,6 +3,7 @@ module github.com/ralexstokes/relay-monitor
 go 1.19
 
 require (
+	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/ethereum/go-ethereum v1.12.0
 	github.com/flashbots/go-boost-utils v1.6.0
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
@@ -13,6 +14,7 @@ require (
 	github.com/r3labs/sse/v2 v2.10.0
 	github.com/segmentio/kafka-go v0.4.43
 	go.uber.org/zap v1.24.0
+	gopkg.in/cenkalti/backoff.v1 v1.1.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -73,7 +75,6 @@ require (
 	golang.org/x/sys v0.8.0 // indirect
 	golang.org/x/text v0.9.0 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
-	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )

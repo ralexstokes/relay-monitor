@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ralexstokes/relay-monitor/pkg/config"
 	"github.com/ralexstokes/relay-monitor/pkg/monitor"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -38,23 +39,23 @@ func main() {
 		logger.Fatalf("could not read config file: %v", err)
 	}
 
-	config := &monitor.Config{}
-	err = yaml.Unmarshal(data, config)
+	appConf := &config.Config{}
+	err = yaml.Unmarshal(data, appConf)
 	if err != nil {
 		logger.Fatalf("could not load config: %v", err)
 	}
 
 	// parse bootstrap servers as CSV
-	if config.Kafka != nil {
-		config.Kafka.BootstrapServers = strings.Split(config.Kafka.BootstrapServersStr, ",")
-		if config.Kafka.Timeout == 0 {
-			config.Kafka.Timeout = defaultKafkaTimeout
+	if appConf.Kafka != nil {
+		appConf.Kafka.BootstrapServers = strings.Split(appConf.Kafka.BootstrapServersStr, ",")
+		if appConf.Kafka.Timeout == 0 {
+			appConf.Kafka.Timeout = defaultKafkaTimeout
 		}
 	}
 
 	ctx := context.Background()
-	logger.Infof("starting relay monitor for %s network", config.Network.Name)
-	m, err := monitor.New(ctx, config, zapLogger)
+	logger.Infof("starting relay monitor for %s network", appConf.Network.Name)
+	m, err := monitor.New(ctx, appConf, zapLogger)
 	if err != nil {
 		logger.Fatalf("could not start relay monitor: %v", err)
 	}
