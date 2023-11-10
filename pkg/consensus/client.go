@@ -188,19 +188,6 @@ func (c *Client) LoadCurrentContext(ctx context.Context, currentSlot types.Slot,
 	}
 	b.Reset()
 
-	// err = backoff.Retry(func() error {
-	// 	err = c.FetchValidators(context.Background())
-	// 	if err != nil {
-	// 		logger.Infof("could not load validators: %v, retrying...", err)
-	// 		return err
-	// 	}
-	// 	return err
-	// }, b)
-	// if err != nil {
-	// 	return fmt.Errorf("could not load validators: %v", err)
-	// }
-	// b.Reset()
-
 	return nil
 }
 
