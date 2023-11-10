@@ -11,6 +11,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/ralexstokes/relay-monitor/pkg/analysis"
+	"github.com/ralexstokes/relay-monitor/pkg/config"
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
 	"github.com/ralexstokes/relay-monitor/pkg/crypto"
 	"github.com/ralexstokes/relay-monitor/pkg/data"
@@ -30,11 +31,6 @@ const (
 	DefaultEpochSpanForFaultsWindow = 256
 )
 
-type Config struct {
-	Host string `yaml:"host"`
-	Port uint16 `yaml:"port"`
-}
-
 type Span struct {
 	Start types.Epoch `json:"start_epoch,string"`
 	End   types.Epoch `json:"end_epoch,string"`
@@ -46,8 +42,8 @@ type FaultsResponse struct {
 }
 
 type Server struct {
-	config *Config
-	logger *zap.Logger
+	appConf *config.ApiConfig
+	logger  *zap.Logger
 
 	analyzer        *analysis.Analyzer
 	events          chan<- data.Event
@@ -56,9 +52,9 @@ type Server struct {
 	consensusClient *consensus.Client
 }
 
-func New(config *Config, logger *zap.Logger, analyzer *analysis.Analyzer, events chan<- data.Event, clock *consensus.Clock, store store.Storer, consensusClient *consensus.Client) *Server {
+func New(appConf *config.ApiConfig, logger *zap.Logger, analyzer *analysis.Analyzer, events chan<- data.Event, clock *consensus.Clock, store store.Storer, consensusClient *consensus.Client) *Server {
 	return &Server{
-		config:          config,
+		appConf:         appConf,
 		logger:          logger,
 		analyzer:        analyzer,
 		events:          events,
@@ -335,7 +331,7 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) Run(ctx context.Context) error {
 	logger := s.logger.Sugar()
-	host := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
+	host := fmt.Sprintf("%s:%d", s.appConf.Host, s.appConf.Port)
 	logger.Infof("API server listening on %s", host)
 
 	mux := http.NewServeMux()

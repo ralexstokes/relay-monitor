@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ralexstokes/relay-monitor/pkg/config"
 	kafka "github.com/segmentio/kafka-go"
 )
 
@@ -14,16 +15,11 @@ type Output struct {
 	Path        string
 	f           *os.File
 	lock        sync.Mutex
-	kConf       *KafkaConfig
+	kConf       *config.KafkaConfig
 	kafkaWriter *kafka.Writer
 }
 
-type KafkaConfig struct {
-	Topic            string
-	BootstrapServers []string
-}
-
-func NewFileOutput(filePath string, kafkaConfig *KafkaConfig) (*Output, error) {
+func NewFileOutput(filePath string, kafkaConfig *config.KafkaConfig) (*Output, error) {
 	// check and prepare file
 	err := CheckFile(filePath)
 	if err != nil {
@@ -56,7 +52,7 @@ func NewFileOutput(filePath string, kafkaConfig *KafkaConfig) (*Output, error) {
 	return output, nil
 }
 
-func (o *Output) WriteEntry(ctx context.Context, entry []byte) error {
+func (o *Output) WriteEntry(entry []byte) error {
 	o.lock.Lock()
 	defer o.lock.Unlock()
 	_, err := o.f.Write(append(entry, byte('\n')))
@@ -64,6 +60,9 @@ func (o *Output) WriteEntry(ctx context.Context, entry []byte) error {
 		return err
 	}
 	if o.kafkaWriter != nil {
+
+		ctx, cancel := context.WithTimeout(context.Background(), o.kConf.Timeout)
+		defer cancel()
 		err = o.kafkaWriter.WriteMessages(ctx, kafka.Message{Value: entry})
 		if err != nil {
 			return fmt.Errorf("could not write to kafka: %v", err)

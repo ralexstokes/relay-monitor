@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/ethereum/go-ethereum/common/math"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/holiman/uint256"
@@ -155,21 +156,37 @@ func (c *Client) LoadCurrentContext(ctx context.Context, currentSlot types.Slot,
 		}
 	}
 
-	err := c.FetchProposers(ctx, currentEpoch)
+	// Start with default values for now, may need to update
+	b := backoff.NewExponentialBackOff()
+	b.MaxElapsedTime = time.Second * 60
+	b.Reset()
+
+	err := backoff.Retry(func() error {
+		err := c.FetchProposers(ctx, currentEpoch)
+		if err != nil {
+			logger.Info("could not load proposers, backing off an retrying")
+		}
+		return err
+	}, b)
 	if err != nil {
-		logger.Warnf("could not load consensus state for epoch %d: %v", currentEpoch, err)
+		return fmt.Errorf("could not load proposers: %v", err)
 	}
+
+	b.Reset()
 
 	nextEpoch := currentEpoch + 1
-	err = c.FetchProposers(ctx, nextEpoch)
+	err = backoff.Retry(func() error {
+		err = c.FetchProposers(ctx, nextEpoch)
+		if err != nil {
+			logger.Infof("could not load consensus state for epoch %d: %v", nextEpoch, err)
+			return err
+		}
+		return err
+	}, b)
 	if err != nil {
-		logger.Warnf("could not load consensus state for epoch %d: %v", nextEpoch, err)
+		return fmt.Errorf("could not load next epoch proposers: %v", err)
 	}
-
-	err = c.FetchValidators(ctx)
-	if err != nil {
-		logger.Warnf("could not load validators: %v", err)
-	}
+	b.Reset()
 
 	return nil
 }
@@ -260,7 +277,27 @@ func (c *Client) GetValidator(publicKey *types.PublicKey) (*eth2api.ValidatorRes
 
 	validator, ok := c.validatorCache[*publicKey]
 	if !ok {
-		return nil, fmt.Errorf("missing validator entry for public key %s", publicKey)
+
+		pubKeys, _ := publicKey.MarshalText()
+		var x common.BLSPubkey
+		err := x.UnmarshalText(pubKeys)
+		if err != nil {
+			return nil, err
+		}
+
+		filter := eth2api.ValidatorIdPubkey(x)
+		exists, err := beaconapi.StateValidator(context.Background(), c.client, eth2api.StateHead, filter, validator)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			return nil, fmt.Errorf("could not fetch validators from remote endpoint because they do not exist")
+		}
+
+		publicKey := validator.Validator.Pubkey
+		key := types.PublicKey(publicKey)
+		c.validatorCache[key] = validator
+		c.validatorIndexCache[uint64(validator.Index)] = &key
 	}
 	return validator, nil
 }
@@ -320,15 +357,30 @@ func (c *Client) FetchBlockRequest(ctx context.Context, slot types.Slot, dest *e
 func (c *Client) RetryBlockRequest(ctx context.Context, slot types.Slot, dest *eth2api.VersionedSignedBeaconBlock) error {
 	// Retry previous slot 5 times
 	logger := c.logger.Sugar()
-	for i := 1; i < 5; i++ {
-		logger.Warnf("could not find slot: %d. Retrying in %ds. Attempt %d", slot, i, i)
-		// Sleep and then retry in case it was a Node issue
-		time.Sleep(time.Duration(i) * time.Second)
+
+	b := backoff.NewExponentialBackOff()
+	b.MaxElapsedTime = time.Second * 12
+	b.InitialInterval = time.Second
+	b.Reset()
+
+	err := backoff.Retry(func() error {
+		logger.Warnf("could not find slot: %d. Retrying in %vs.", slot, b.NextBackOff().Seconds())
 		exists, err := c.FetchBlockRequest(ctx, slot, dest)
-		if exists && err == nil {
+		if err != nil {
 			return err
 		}
+
+		if exists {
+			return nil
+		} else {
+			return fmt.Errorf("could not find block for slot %d", slot)
+		}
+	}, b)
+
+	if err == nil {
+		return nil
 	}
+
 	// Try 3 previous slots
 	for i := 1; i < 4; i++ {
 		targetSlot := slot - uint64(i)
@@ -403,9 +455,9 @@ func (c *Client) StreamHeads(ctx context.Context) <-chan types.Coordinate {
 }
 
 // TODO handle reorgs
-func (c *Client) FetchValidators(ctx context.Context) error {
+func (c *Client) FetchValidators(ctx context.Context, validatorIds []eth2api.ValidatorId, statusFilter []eth2api.ValidatorStatus) error {
 	var response []eth2api.ValidatorResponse
-	exists, err := beaconapi.StateValidators(ctx, c.client, eth2api.StateHead, nil, nil, &response)
+	exists, err := beaconapi.StateValidators(ctx, c.client, eth2api.StateHead, validatorIds, statusFilter, &response)
 	if err != nil {
 		return err
 	}
