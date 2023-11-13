@@ -21,6 +21,7 @@ import (
 	"github.com/protolambda/eth2api/client/beaconapi"
 	"github.com/protolambda/eth2api/client/configapi"
 	"github.com/protolambda/eth2api/client/validatorapi"
+	"github.com/protolambda/zrnt/eth2/beacon/bellatrix"
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
 	"github.com/r3labs/sse/v2"
@@ -251,7 +252,7 @@ func (c *Client) GetProposer(slot types.Slot) (*ValidatorInfo, error) {
 	return &validator, nil
 }
 
-func (c *Client) GetBlock(slot types.Slot) (*capella.SignedBeaconBlock, error) {
+func (c *Client) GetBlock(slot types.Slot) (eth2api.SignedBeaconBlock, error) {
 	val, ok := c.blockCache.Get(slot)
 	if !ok {
 		// TODO pipe in context
@@ -264,7 +265,7 @@ func (c *Client) GetBlock(slot types.Slot) (*capella.SignedBeaconBlock, error) {
 			return nil, fmt.Errorf("could not find block for slot %d", slot)
 		}
 	}
-	block, ok := val.(*capella.SignedBeaconBlock)
+	block, ok := val.(eth2api.SignedBeaconBlock)
 	if !ok {
 		return nil, fmt.Errorf("internal: block cache contains an unexpected value %v with type %T", val, val)
 	}
@@ -312,7 +313,7 @@ func (c *Client) GetParentHash(ctx context.Context, slot types.Slot) (types.Hash
 	if err != nil {
 		return types.Hash{}, err
 	}
-	return types.Hash(block.Message.Body.ExecutionPayload.BlockHash), nil
+	return c.getBlockHash(block)
 }
 
 func (c *Client) GetProposerPublicKey(ctx context.Context, slot types.Slot) (*types.PublicKey, error) {
@@ -408,14 +409,67 @@ func (c *Client) FetchBlock(ctx context.Context, slot types.Slot) error {
 		return err
 	}
 
-	capellaBlock, ok := signedBeaconBlock.Data.(*capella.SignedBeaconBlock)
-	if !ok {
-		return fmt.Errorf("could not parse block %s", signedBeaconBlock)
+	c.blockCache.Add(slot, signedBeaconBlock.Data)
+
+	blockNumber, err := c.getBlockNumber(signedBeaconBlock.Data)
+	if err != nil {
+		return err
 	}
 
-	c.blockCache.Add(slot, capellaBlock)
-	c.blockNumberToSlotIndex.Add(uint64(capellaBlock.Message.Body.ExecutionPayload.BlockNumber), slot)
+	c.blockNumberToSlotIndex.Add(blockNumber, slot)
 	return nil
+}
+
+func (c *Client) getBlockNumber(signedBlock eth2api.SignedBeaconBlock) (uint64, error) {
+	var blockNumber uint64
+	switch block := signedBlock.(type) {
+	case *bellatrix.SignedBeaconBlock:
+		blockNumber = uint64(block.Message.Body.ExecutionPayload.BlockNumber)
+	case *capella.SignedBeaconBlock:
+		blockNumber = uint64(block.Message.Body.ExecutionPayload.BlockNumber)
+	default:
+		return 0, fmt.Errorf("unexpected block type %T", block)
+	}
+
+	return blockNumber, nil
+}
+
+func (c *Client) getBlockHash(signedBlock eth2api.SignedBeaconBlock) (types.Hash, error) {
+	var blockHash types.Hash
+	switch block := signedBlock.(type) {
+	case *bellatrix.SignedBeaconBlock:
+		blockHash = types.Hash(block.Message.Body.ExecutionPayload.BlockHash)
+	case *capella.SignedBeaconBlock:
+		blockHash = types.Hash(block.Message.Body.ExecutionPayload.BlockHash)
+	default:
+		return types.Hash{}, fmt.Errorf("unexpected block type %T", block)
+	}
+
+	return blockHash, nil
+}
+
+type GasDetails struct {
+	GasLimit      uint64
+	GasUsed       uint64
+	BaseFeePerGas uint256.Int
+}
+
+func (c *Client) getGasDetails(versionedBlock eth2api.SignedBeaconBlock) (*GasDetails, error) {
+	gasDetails := &GasDetails{}
+	switch block := versionedBlock.(type) {
+	case *bellatrix.SignedBeaconBlock:
+		gasDetails.GasLimit = uint64(block.Message.Body.ExecutionPayload.GasLimit)
+		gasDetails.GasUsed = uint64(block.Message.Body.ExecutionPayload.GasUsed)
+		gasDetails.BaseFeePerGas = (uint256.Int)(block.Message.Body.ExecutionPayload.BaseFeePerGas)
+	case *capella.SignedBeaconBlock:
+		gasDetails.GasLimit = uint64(block.Message.Body.ExecutionPayload.GasLimit)
+		gasDetails.GasUsed = uint64(block.Message.Body.ExecutionPayload.GasUsed)
+		gasDetails.BaseFeePerGas = (uint256.Int)(block.Message.Body.ExecutionPayload.BaseFeePerGas)
+	default:
+		return nil, fmt.Errorf("unexpected block type %T", block)
+	}
+
+	return gasDetails, nil
 }
 
 type headEvent struct {
@@ -507,7 +561,13 @@ func (c *Client) GetBlockNumberForProposal(slot types.Slot /*, proposerPublicKey
 	if err != nil {
 		return 0, err
 	}
-	return uint64(parentBlock.Message.Body.ExecutionPayload.BlockNumber) + 1, nil
+
+	blockNumber, err := c.getBlockNumber(parentBlock)
+	if err != nil {
+		return 0, err
+	}
+
+	return blockNumber + 1, nil
 }
 
 func computeBaseFee(parentGasTarget, parentGasUsed uint64, parentBaseFee *big.Int) *types.Uint256 {
@@ -545,13 +605,14 @@ func (c *Client) GetBaseFeeForProposal(slot types.Slot /*, proposerPublicKey *ty
 	if err != nil {
 		return nil, err
 	}
-	parentExecutionPayload := parentBlock.Message.Body.ExecutionPayload
-	parentGasTarget := uint64(parentExecutionPayload.GasLimit) / GasElasticityMultiplier
-	parentGasUsed := uint64(parentExecutionPayload.GasUsed)
 
-	parentBaseFee := (uint256.Int)(parentExecutionPayload.BaseFeePerGas)
-	parentBaseFeeAsInt := parentBaseFee.ToBig()
-	return computeBaseFee(parentGasTarget, parentGasUsed, parentBaseFeeAsInt), nil
+	parentGasDetails, err := c.getGasDetails(parentBlock)
+	if err != nil {
+		return nil, err
+	}
+
+	parentGasTarget := parentGasDetails.GasLimit / GasElasticityMultiplier
+	return computeBaseFee(parentGasTarget, parentGasDetails.GasUsed, parentGasDetails.BaseFeePerGas.ToBig()), nil
 }
 
 func (c *Client) GetParentGasLimit(ctx context.Context, blockNumber uint64) (uint64, error) {
@@ -568,7 +629,13 @@ func (c *Client) GetParentGasLimit(ctx context.Context, blockNumber uint64) (uin
 	if err != nil {
 		return 0, err
 	}
-	return uint64(parentBlock.Message.Body.ExecutionPayload.GasLimit), nil
+
+	gasDetails, err := c.getGasDetails(parentBlock)
+	if err != nil {
+		return 0, err
+	}
+
+	return gasDetails.GasLimit, nil
 }
 
 func (c *Client) GetPublicKeyForIndex(ctx context.Context, validatorIndex types.ValidatorIndex) (*types.PublicKey, error) {
