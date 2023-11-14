@@ -20,7 +20,6 @@ type Output struct {
 	kConf      *config.KafkaConfig
 	ctx        context.Context
 	producer   *kafka.Producer
-	deliveryCh chan kafka.Event
 }
 
 func NewFileOutput(ctx context.Context, filePath string, kafkaConfig *config.KafkaConfig) (*Output, error) {
