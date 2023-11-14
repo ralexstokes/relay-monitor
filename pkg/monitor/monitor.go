@@ -53,7 +53,7 @@ func parseRelaysFromEndpoint(logger *zap.SugaredLogger, relayEndpoints []string)
 func New(ctx context.Context, appConf *config.Config, zapLogger *zap.Logger) (*Monitor, error) {
 	logger := zapLogger.Sugar()
 
-	fileOutput, err := output.NewFileOutput(appConf.Output.Path, appConf.Kafka)
+	fileOutput, err := output.NewFileOutput(ctx, appConf.Output.Path, appConf.Kafka)
 	if err != nil {
 		return nil, fmt.Errorf("could not create output file: %v", err)
 	}
