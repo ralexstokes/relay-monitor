@@ -14,13 +14,13 @@ import (
 )
 
 type Output struct {
-	Path          string
-	f             *os.File
-	lock          sync.Mutex
-	kConf         *config.KafkaConfig
-	ctx           context.Context
-	producer *kafka.Producer
-	deliveryCh    chan kafka.Event
+	Path       string
+	f          *os.File
+	lock       sync.Mutex
+	kConf      *config.KafkaConfig
+	ctx        context.Context
+	producer   *kafka.Producer
+	deliveryCh chan kafka.Event
 }
 
 func NewFileOutput(ctx context.Context, filePath string, kafkaConfig *config.KafkaConfig) (*Output, error) {
@@ -39,6 +39,7 @@ func NewFileOutput(ctx context.Context, filePath string, kafkaConfig *config.Kaf
 		Path:  filePath,
 		f:     f,
 		kConf: kafkaConfig,
+		ctx:   ctx,
 	}
 
 	// check and prepare kafka producer
