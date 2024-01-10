@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/ethereum/go-ethereum/common/math"
 	lru "github.com/hashicorp/golang-lru"
@@ -151,7 +152,7 @@ func (c *Client) LoadCurrentContext(ctx context.Context, currentSlot types.Slot,
 	logger := c.logger.Sugar()
 
 	for i := uint64(0); i < c.SlotsPerEpoch; i++ {
-		err := c.FetchBlock(ctx, currentSlot-i)
+		err := c.FetchBlock(ctx, currentSlot-types.Slot(i))
 		if err != nil {
 			logger.Warnf("could not fetch latest block for slot %d: %v", currentSlot, err)
 		}
@@ -204,7 +205,7 @@ func (c *Client) FetchGenesis(ctx context.Context) error {
 
 	c.GenesisTime = uint64(resp.GenesisTime)
 	c.genesisForkVersion = types.ForkVersion(resp.GenesisForkVersion)
-	c.GenesisValidatorsRoot = types.Hash(resp.GenesisValidatorsRoot)
+	c.GenesisValidatorsRoot = types.Root(resp.GenesisValidatorsRoot)
 	return nil
 }
 
@@ -228,7 +229,7 @@ func (c *Client) fetchSpec(ctx context.Context) error {
 
 // NOTE: this assumes the fork schedule is presented in ascending order
 func (c *Client) GetForkVersion(slot types.Slot) types.ForkVersion {
-	epoch := slot / c.SlotsPerEpoch
+	epoch := uint64(slot) / c.SlotsPerEpoch
 	if epoch >= c.capellaForkEpoch {
 		return c.capellaForkVersion
 	} else if epoch >= c.bellatrixForkEpoch {
@@ -241,7 +242,7 @@ func (c *Client) GetForkVersion(slot types.Slot) types.ForkVersion {
 }
 
 func (c *Client) GetProposer(slot types.Slot) (*ValidatorInfo, error) {
-	val, ok := c.proposerCache.Get(slot)
+	val, ok := c.proposerCache.Get(uint64(slot))
 	if !ok {
 		return nil, fmt.Errorf("could not find proposer for slot %d", slot)
 	}
@@ -384,7 +385,7 @@ func (c *Client) RetryBlockRequest(ctx context.Context, slot types.Slot, dest *e
 
 	// Try 3 previous slots
 	for i := 1; i < 4; i++ {
-		targetSlot := slot - uint64(i)
+		targetSlot := slot - types.Slot(i)
 		logger.Warnf("could not find slot: %d. Retrying with previous slot %d", slot, targetSlot)
 		exists, err := c.FetchBlockRequest(ctx, targetSlot, dest)
 		if exists && err == nil {
@@ -621,11 +622,11 @@ func (c *Client) GetParentGasLimit(ctx context.Context, blockNumber uint64) (uin
 	if !ok {
 		return 0, fmt.Errorf("missing block for block number %d", blockNumber)
 	}
-	slot, ok := slotValue.(uint64)
+	slot, ok := slotValue.(phase0.Slot)
 	if !ok {
 		return 0, fmt.Errorf("internal: unexpected type %T in block number to slot index", slotValue)
 	}
-	parentBlock, err := c.GetBlock(slot - 1)
+	parentBlock, err := c.GetBlock(slot - types.Slot(1))
 	if err != nil {
 		return 0, err
 	}

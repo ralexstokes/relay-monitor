@@ -162,22 +162,23 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 	}
 
 	defer a.outputValidationError(invalidBidErr)
-	if bidCtx.RelayPublicKey != bid.Message.Pubkey {
+	publicKey := types.PublicKey(bid.Message.Pubkey)
+	if bidCtx.RelayPublicKey != publicKey {
 		invalidBidErr.Reason = "incorrect public key from relay"
 		invalidBidErr.Context[ExpectedKey] = bidCtx.RelayPublicKey
 		invalidBidErr.Context[ActualKey] = bid.Message.Pubkey
 		return invalidBidErr, nil
 	}
 
-	// validSignature, err := crypto.VerifySignature(bid.Message, a.consensusClient.SignatureDomainForBuilder(), bid.Message.Pubkey[:], bid.Signature[:])
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// if !validSignature {
-	// 	invalidBidErr.Reason = "relay public key does not match signature"
-	// 	// No actual and expected when signatures don't match
-	// 	return invalidBidErr, nil
-	// }
+	validSignature, err := crypto.VerifySignature(bid.Message, a.consensusClient.SignatureDomainForBuilder(), bid.Message.Pubkey[:], bid.Signature[:])
+	if err != nil {
+		return nil, err
+	}
+	if !validSignature {
+		invalidBidErr.Reason = "relay public key does not match signature"
+		// No actual and expected when signatures don't match
+		return invalidBidErr, nil
+	}
 
 	header := bid.Message.Header
 
@@ -214,9 +215,9 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 	if err != nil {
 		return nil, err
 	}
-	if expectedRandomness != header.Random {
+	if expectedRandomness != header.PrevRandao {
 		invalidBidErr.Context[ExpectedKey] = expectedRandomness
-		invalidBidErr.Context[ActualKey] = header.Random
+		invalidBidErr.Context[ActualKey] = header.PrevRandao
 		return invalidBidErr, nil
 	}
 
@@ -335,7 +336,7 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 	blindedBeaconBlock := signedBlindedBeaconBlock.Message
 
 	// Verify signature first, to avoid doing unnecessary work in the event this is a "bad" transcript
-	proposerPublicKey, err := a.consensusClient.GetPublicKeyForIndex(ctx, blindedBeaconBlock.ProposerIndex)
+	proposerPublicKey, err := a.consensusClient.GetPublicKeyForIndex(ctx, uint64(blindedBeaconBlock.ProposerIndex))
 	if err != nil {
 		logger.Warnw("could not find public key for validator index", "error", err)
 		return
@@ -356,7 +357,7 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 		Slot:              blindedBeaconBlock.Slot,
 		ParentHash:        bid.Header.ParentHash,
 		ProposerPublicKey: *proposerPublicKey,
-		RelayPublicKey:    bid.Pubkey,
+		RelayPublicKey:    types.PublicKey(bid.Pubkey),
 	}
 	existingBid, err := a.store.GetBid(ctx, bidCtx)
 	if err != nil {

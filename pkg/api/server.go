@@ -175,14 +175,14 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) validateRegistrationTimestamp(registration, currentRegistration *types.SignedValidatorRegistration) error {
-	timestamp := registration.Message.Timestamp
+	timestamp := registration.Message.Timestamp.Unix()
 	deadline := time.Now().Add(10 * time.Second).Unix()
-	if timestamp >= uint64(deadline) {
+	if timestamp >= deadline {
 		return fmt.Errorf("invalid registration: too far in future, %+v", registration)
 	}
 
 	if currentRegistration != nil {
-		lastTimestamp := currentRegistration.Message.Timestamp
+		lastTimestamp := currentRegistration.Message.Timestamp.Unix()
 		if timestamp < lastTimestamp {
 			return fmt.Errorf("invalid registration: more recent successful registration, %+v", registration)
 		}
@@ -204,7 +204,7 @@ func (s *Server) validateRegistrationSignature(registration *types.SignedValidat
 }
 
 func (s *Server) validateRegistrationValidatorStatus(registration *types.SignedValidatorRegistration) error {
-	publicKey := registration.Message.Pubkey
+	publicKey := types.PublicKey(registration.Message.Pubkey)
 	status, err := s.consensusClient.GetValidatorStatus(&publicKey)
 	if err != nil {
 		return err
@@ -255,7 +255,8 @@ func (s *Server) handleRegisterValidator(w http.ResponseWriter, r *http.Request)
 	}
 
 	for _, registration := range registrations {
-		currentRegistration, err := store.GetLatestValidatorRegistration(ctx, s.store, &registration.Message.Pubkey)
+		publicKey := types.PublicKey(registration.Message.Pubkey)
+		currentRegistration, err := store.GetLatestValidatorRegistration(ctx, s.store, &publicKey)
 		if err != nil {
 			logger.Warnw("could not get registrations for validator", "error", err, "registration", registration)
 			http.Error(w, err.Error(), http.StatusInternalServerError)

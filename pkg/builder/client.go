@@ -3,12 +3,11 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
 
-	boostTypes "github.com/flashbots/go-boost-utils/types"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/ralexstokes/relay-monitor/pkg/metrics"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
@@ -94,7 +93,7 @@ func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.
 		return nil, uint64(duration), nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		rspBytes, err := ioutil.ReadAll(resp.Body)
+		rspBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
 			c.logger.Debugw("failed to read response body", zap.Error(err))
 			return nil, uint64(duration), err
@@ -110,7 +109,7 @@ func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.
 		return nil, uint64(duration), &types.ClientError{Type: types.RelayError, Code: resp.StatusCode, Message: errorMsg.Message}
 	}
 
-	var bid boostTypes.GetHeaderResponse
+	var bid types.GetHeaderResponse
 	err = json.NewDecoder(resp.Body).Decode(&bid)
 	if err != nil {
 		return bid.Data, uint64(duration), &types.ClientError{Type: types.RelayError, Code: 500, Message: err.Error()}
