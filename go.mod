@@ -3,10 +3,11 @@ module github.com/ralexstokes/relay-monitor
 go 1.19
 
 require (
-	github.com/attestantio/go-builder-client v0.3.2-0.20230623215408-1b5c4f7aaeaa
-	github.com/attestantio/go-eth2-client v0.18.3
+	github.com/attestantio/go-builder-client v0.4.2
+	github.com/attestantio/go-eth2-client v0.19.7
 	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/ethereum/go-ethereum v1.13.8
+	github.com/ferranbt/fastssz v0.1.3
 	github.com/flashbots/go-boost-utils v1.7.1
 	github.com/hashicorp/golang-lru v1.0.2
 	github.com/holiman/uint256 v1.2.4
@@ -25,17 +26,16 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/consensys/bavard v0.1.13 // indirect
 	github.com/consensys/gnark-crypto v0.12.1 // indirect
-	github.com/fatih/color v1.13.0 // indirect
-	github.com/ferranbt/fastssz v0.1.3 // indirect
+	github.com/fatih/color v1.15.0 // indirect
 	github.com/go-playground/validator/v10 v10.11.1 // indirect
-	github.com/goccy/go-yaml v1.9.2 // indirect
+	github.com/goccy/go-yaml v1.11.2 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
 	github.com/kilic/bls12-381 v0.1.0 // indirect
 	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.6 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-isatty v0.0.17 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
@@ -53,7 +53,7 @@ require (
 	golang.org/x/crypto v0.18.0 // indirect
 	golang.org/x/net v0.20.0 // indirect
 	golang.org/x/sys v0.16.0 // indirect
-	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
+	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/protobuf v1.32.0 // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

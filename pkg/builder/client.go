@@ -112,7 +112,7 @@ func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.
 	var bid types.GetHeaderResponse
 	err = json.NewDecoder(resp.Body).Decode(&bid)
 	if err != nil {
-		return bid.Data, uint64(duration), &types.ClientError{Type: types.RelayError, Code: 500, Message: err.Error()}
+		return bid, uint64(duration), &types.ClientError{Type: types.RelayError, Code: 500, Message: err.Error()}
 	}
-	return bid.Data, uint64(duration), err
+	return bid, uint64(duration), err
 }

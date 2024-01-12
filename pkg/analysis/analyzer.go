@@ -3,6 +3,7 @@ package analysis
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -161,16 +162,69 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 		},
 	}
 
-	defer a.outputValidationError(invalidBidErr)
-	publicKey := types.PublicKey(bid.Message.Pubkey)
-	if bidCtx.RelayPublicKey != publicKey {
-		invalidBidErr.Reason = "incorrect public key from relay"
-		invalidBidErr.Context[ExpectedKey] = bidCtx.RelayPublicKey
-		invalidBidErr.Context[ActualKey] = bid.Message.Pubkey
+	blockNumber, err := bid.BlockNumber()
+	if err != nil {
+		invalidBidErr.Reason = fmt.Sprintf("failed to get bid block number: %s", err)
 		return invalidBidErr, nil
 	}
 
-	validSignature, err := crypto.VerifySignature(bid.Message, a.consensusClient.SignatureDomainForBuilder(), bid.Message.Pubkey[:], bid.Signature[:])
+	gasLimit, err := bid.GasLimit()
+	if err != nil {
+		invalidBidErr.Reason = fmt.Sprintf("failed to get bid gas limit: %s", err)
+		return invalidBidErr, nil
+	}
+
+	gasUsed, err := bid.GasUsed()
+	if err != nil {
+		invalidBidErr.Reason = fmt.Sprintf("failed to get bid gas used: %s", err)
+		return invalidBidErr, nil
+	}
+
+	timestamp, err := bid.Timestamp()
+	if err != nil {
+		invalidBidErr.Reason = fmt.Sprintf("failed to get bid timestamp: %s", err)
+		return invalidBidErr, nil
+	}
+
+	publicKey, err := bid.Builder()
+	if err != nil {
+		invalidBidErr.Reason = fmt.Sprintf("failed to get bid public key: %s", err)
+		return invalidBidErr, nil
+	}
+
+	baseFeePerGas, err := bid.BaseFeePerGas()
+	if err != nil {
+		invalidBidErr.Reason = fmt.Sprintf("failed to get bid base fee per gas: %s", err)
+		return invalidBidErr, nil
+	}
+
+	prevRandao, err := bid.Random()
+	if err != nil {
+		invalidBidErr.Reason = fmt.Sprintf("failed to get bid random: %s", err)
+		return invalidBidErr, nil
+	}
+
+	parentHash, err := bid.ParentHash()
+	if err != nil {
+		invalidBidErr.Reason = fmt.Sprintf("failed to get bid parent hash: %s", err)
+		return invalidBidErr, nil
+	}
+
+	signature, err := bid.Signature()
+	if err != nil {
+		invalidBidErr.Reason = fmt.Sprintf("failed to get bid signature: %s", err)
+		return invalidBidErr, nil
+	}
+
+	defer a.outputValidationError(invalidBidErr)
+	if bidCtx.RelayPublicKey != types.PublicKey(publicKey) {
+		invalidBidErr.Reason = "incorrect public key from relay"
+		invalidBidErr.Context[ExpectedKey] = bidCtx.RelayPublicKey
+		invalidBidErr.Context[ActualKey] = types.PublicKey(publicKey)
+		return invalidBidErr, nil
+	}
+
+	validSignature, err := crypto.VerifySignature(bid, a.consensusClient.SignatureDomainForBuilder(), publicKey[:], signature[:])
 	if err != nil {
 		return nil, err
 	}
@@ -180,12 +234,10 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 		return invalidBidErr, nil
 	}
 
-	header := bid.Message.Header
-
-	if bidCtx.ParentHash != header.ParentHash {
+	if bidCtx.ParentHash != parentHash {
 		invalidBidErr.Reason = "invalid parent hash"
 		invalidBidErr.Context[ExpectedKey] = bidCtx.ParentHash
-		invalidBidErr.Context[ActualKey] = header.ParentHash
+		invalidBidErr.Context[ActualKey] = parentHash
 		return invalidBidErr, nil
 	}
 
@@ -199,14 +251,14 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 		// NOTE: need transaction set for possibility of payment transaction
 		// so we defer analysis of fee recipient until we have the full payload
 
-		valid, err := a.validateGasLimit(ctx, header.GasLimit, gasLimitPreference, header.BlockNumber)
+		valid, err := a.validateGasLimit(ctx, gasLimit, gasLimitPreference, blockNumber)
 		if err != nil {
 			return nil, err
 		}
 		if !valid {
 			invalidBidErr.Reason = "invalid gas limit"
 			invalidBidErr.Context[ExpectedKey] = gasLimitPreference
-			invalidBidErr.Context[ActualKey] = header.GasLimit
+			invalidBidErr.Context[ActualKey] = gasLimit
 			return invalidBidErr, nil
 		}
 	}
@@ -215,9 +267,9 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 	if err != nil {
 		return nil, err
 	}
-	if expectedRandomness != header.PrevRandao {
+	if expectedRandomness != prevRandao {
 		invalidBidErr.Context[ExpectedKey] = expectedRandomness
-		invalidBidErr.Context[ActualKey] = header.PrevRandao
+		invalidBidErr.Context[ActualKey] = prevRandao
 		return invalidBidErr, nil
 	}
 
@@ -225,25 +277,25 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 	if err != nil {
 		return nil, err
 	}
-	if expectedBlockNumber != header.BlockNumber {
+	if expectedBlockNumber != blockNumber {
 		invalidBidErr.Reason = "invalid block number"
 		invalidBidErr.Context[ExpectedKey] = expectedBlockNumber
-		invalidBidErr.Context[ActualKey] = header.BlockNumber
+		invalidBidErr.Context[ActualKey] = blockNumber
 		return invalidBidErr, nil
 	}
 
-	if header.GasUsed > header.GasLimit {
+	if gasUsed > gasLimit {
 		invalidBidErr.Reason = "gas used is higher than gas limit"
-		invalidBidErr.Context[ExpectedKey] = header.GasLimit
-		invalidBidErr.Context[ActualKey] = header.GasUsed
+		invalidBidErr.Context[ExpectedKey] = gasLimit
+		invalidBidErr.Context[ActualKey] = gasUsed
 		return invalidBidErr, nil
 	}
 
 	expectedTimestamp := a.clock.SlotInSeconds(bidCtx.Slot)
-	if expectedTimestamp != int64(header.Timestamp) {
+	if expectedTimestamp != int64(timestamp) {
 		invalidBidErr.Reason = "invalid timestamp"
 		invalidBidErr.Context[ExpectedKey] = expectedTimestamp
-		invalidBidErr.Context[ActualKey] = header.Timestamp
+		invalidBidErr.Context[ActualKey] = timestamp
 		return invalidBidErr, nil
 	}
 
@@ -252,7 +304,7 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 		return nil, err
 	}
 	baseFee := uint256.NewInt(0)
-	baseFee.SetBytes(reverse(header.BaseFeePerGas[:]))
+	baseFee.SetBytes(reverse(baseFeePerGas[:]))
 	if !expectedBaseFee.Eq(baseFee) {
 		invalidBidErr.Reason = "invalid base fee"
 		invalidBidErr.Context[ExpectedKey] = expectedBaseFee
@@ -331,9 +383,21 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 
 	transcript := event.Transcript
 
-	bid := transcript.Bid.Message
+	bid := transcript.Bid
 	signedBlindedBeaconBlock := &transcript.Acceptance
 	blindedBeaconBlock := signedBlindedBeaconBlock.Message
+
+	publicKey, err := bid.Builder()
+	if err != nil {
+		logger.Warnw("could not get public key from bid", "error", err, "bid", bid)
+		return
+	}
+
+	parentHash, err := bid.ParentHash()
+	if err != nil {
+		logger.Warnw("could not get parent hash from bid", "error", err, "bid", bid)
+		return
+	}
 
 	// Verify signature first, to avoid doing unnecessary work in the event this is a "bad" transcript
 	proposerPublicKey, err := a.consensusClient.GetPublicKeyForIndex(ctx, uint64(blindedBeaconBlock.ProposerIndex))
@@ -355,9 +419,9 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 
 	bidCtx := &types.BidContext{
 		Slot:              blindedBeaconBlock.Slot,
-		ParentHash:        bid.Header.ParentHash,
+		ParentHash:        parentHash,
 		ProposerPublicKey: *proposerPublicKey,
-		RelayPublicKey:    types.PublicKey(bid.Pubkey),
+		RelayPublicKey:    types.PublicKey(publicKey),
 	}
 	existingBid, err := a.store.GetBid(ctx, bidCtx)
 	if err != nil {

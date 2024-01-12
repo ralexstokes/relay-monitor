@@ -25,6 +25,7 @@ import (
 	"github.com/protolambda/zrnt/eth2/beacon/bellatrix"
 	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
+	"github.com/protolambda/zrnt/eth2/beacon/deneb"
 	"github.com/r3labs/sse/v2"
 	"github.com/ralexstokes/relay-monitor/pkg/crypto"
 	"github.com/ralexstokes/relay-monitor/pkg/metrics"
@@ -64,6 +65,8 @@ type Client struct {
 	bellatrixForkEpoch    types.Epoch
 	capellaForkVersion    types.ForkVersion
 	capellaForkEpoch      types.Epoch
+	denebForkVersion      types.ForkVersion
+	denebForkEpoch        types.Epoch
 
 	builderSignatureDomain *crypto.Domain
 
@@ -224,13 +227,17 @@ func (c *Client) fetchSpec(ctx context.Context) error {
 	c.bellatrixForkEpoch = types.Epoch(spec.Config.BELLATRIX_FORK_EPOCH)
 	c.capellaForkVersion = types.ForkVersion(spec.Config.CAPELLA_FORK_VERSION)
 	c.capellaForkEpoch = types.Epoch(spec.Config.CAPELLA_FORK_EPOCH)
+	c.denebForkVersion = types.ForkVersion(spec.Config.DENEB_FORK_VERSION)
+	c.denebForkEpoch = types.Epoch(spec.Config.DENEB_FORK_EPOCH)
 	return nil
 }
 
 // NOTE: this assumes the fork schedule is presented in ascending order
 func (c *Client) GetForkVersion(slot types.Slot) types.ForkVersion {
 	epoch := uint64(slot) / c.SlotsPerEpoch
-	if epoch >= c.capellaForkEpoch {
+	if epoch >= c.denebForkEpoch {
+		return c.denebForkVersion
+	} else if epoch >= c.capellaForkEpoch {
 		return c.capellaForkVersion
 	} else if epoch >= c.bellatrixForkEpoch {
 		return c.bellatrixForkVersion
@@ -428,6 +435,8 @@ func (c *Client) getBlockNumber(signedBlock eth2api.SignedBeaconBlock) (uint64, 
 		blockNumber = uint64(block.Message.Body.ExecutionPayload.BlockNumber)
 	case *capella.SignedBeaconBlock:
 		blockNumber = uint64(block.Message.Body.ExecutionPayload.BlockNumber)
+	case *deneb.SignedBeaconBlock:
+		blockNumber = uint64(block.Message.Body.ExecutionPayload.BlockNumber)
 	default:
 		return 0, fmt.Errorf("unexpected block type %T", block)
 	}
@@ -441,6 +450,8 @@ func (c *Client) getBlockHash(signedBlock eth2api.SignedBeaconBlock) (types.Hash
 	case *bellatrix.SignedBeaconBlock:
 		blockHash = types.Hash(block.Message.Body.ExecutionPayload.BlockHash)
 	case *capella.SignedBeaconBlock:
+		blockHash = types.Hash(block.Message.Body.ExecutionPayload.BlockHash)
+	case *deneb.SignedBeaconBlock:
 		blockHash = types.Hash(block.Message.Body.ExecutionPayload.BlockHash)
 	default:
 		return types.Hash{}, fmt.Errorf("unexpected block type %T", block)
@@ -463,6 +474,10 @@ func (c *Client) getGasDetails(versionedBlock eth2api.SignedBeaconBlock) (*GasDe
 		gasDetails.GasUsed = uint64(block.Message.Body.ExecutionPayload.GasUsed)
 		gasDetails.BaseFeePerGas = (uint256.Int)(block.Message.Body.ExecutionPayload.BaseFeePerGas)
 	case *capella.SignedBeaconBlock:
+		gasDetails.GasLimit = uint64(block.Message.Body.ExecutionPayload.GasLimit)
+		gasDetails.GasUsed = uint64(block.Message.Body.ExecutionPayload.GasUsed)
+		gasDetails.BaseFeePerGas = (uint256.Int)(block.Message.Body.ExecutionPayload.BaseFeePerGas)
+	case *deneb.SignedBeaconBlock:
 		gasDetails.GasLimit = uint64(block.Message.Body.ExecutionPayload.GasLimit)
 		gasDetails.GasUsed = uint64(block.Message.Body.ExecutionPayload.GasUsed)
 		gasDetails.BaseFeePerGas = (uint256.Int)(block.Message.Body.ExecutionPayload.BaseFeePerGas)
