@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/holiman/uint256"
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
@@ -263,7 +264,7 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 		}
 	}
 
-	expectedRandomness, err := a.consensusClient.GetRandomnessForProposal(bidCtx.Slot)
+	expectedRandomness, err := a.consensusClient.GetRandomnessForProposal(phase0.Slot(bidCtx.Slot))
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +274,7 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 		return invalidBidErr, nil
 	}
 
-	expectedBlockNumber, err := a.consensusClient.GetBlockNumberForProposal(bidCtx.Slot)
+	expectedBlockNumber, err := a.consensusClient.GetBlockNumberForProposal(phase0.Slot(bidCtx.Slot))
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +292,7 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 		return invalidBidErr, nil
 	}
 
-	expectedTimestamp := a.clock.SlotInSeconds(bidCtx.Slot)
+	expectedTimestamp := a.clock.SlotInSeconds(phase0.Slot(bidCtx.Slot))
 	if expectedTimestamp != int64(timestamp) {
 		invalidBidErr.Reason = "invalid timestamp"
 		invalidBidErr.Context[ExpectedKey] = expectedTimestamp
@@ -299,7 +300,7 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 		return invalidBidErr, nil
 	}
 
-	expectedBaseFee, err := a.consensusClient.GetBaseFeeForProposal(bidCtx.Slot)
+	expectedBaseFee, err := a.consensusClient.GetBaseFeeForProposal(phase0.Slot(bidCtx.Slot))
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +437,7 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 	}
 
 	bidCtx := &types.BidContext{
-		Slot:              slot,
+		Slot:              uint64(slot),
 		ParentHash:        parentHash,
 		ProposerPublicKey: *proposerPublicKey,
 		RelayPublicKey:    types.PublicKey(publicKey),

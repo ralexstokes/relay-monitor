@@ -39,7 +39,7 @@ type AuctionTranscript struct {
 }
 
 type BidContext struct {
-	Slot              Slot      `json:"slot,omitempty"`
+	Slot              uint64    `json:"slot,omitempty"`
 	ParentHash        Hash      `json:"parent_hash,omitempty"`
 	ProposerPublicKey PublicKey `json:"proposer_public_key,omitempty"`
 	RelayPublicKey    PublicKey `json:"relay_public_key,omitempty"`
