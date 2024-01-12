@@ -2,13 +2,10 @@ package types
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	v1 "github.com/attestantio/go-builder-client/api/v1"
-	"github.com/attestantio/go-builder-client/spec"
-	consensusapiv1capella "github.com/attestantio/go-eth2-client/api/v1/capella"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
+	consensusapiv1 "github.com/attestantio/go-eth2-client/api"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/holiman/uint256"
@@ -24,182 +21,8 @@ type (
 	Root                        = phase0.Root
 	ValidatorIndex              = uint64
 	SignedValidatorRegistration = v1.SignedValidatorRegistration
-	SignedBlindedBeaconBlock    = consensusapiv1capella.SignedBlindedBeaconBlock
+	SignedBlindedBeaconBlock    = consensusapiv1.VersionedSignedBlindedBeaconBlock
 )
-
-type VersionedSignedBuilderBid struct {
-	spec.VersionedSignedBuilderBid
-}
-
-func (v *VersionedSignedBuilderBid) GasUsed() (uint64, error) {
-	if v == nil {
-		return 0, errors.New("nil struct")
-	}
-	switch v.Version {
-	case consensusspec.DataVersionBellatrix:
-		if v.Bellatrix == nil {
-			return 0, errors.New("no data")
-		}
-		if v.Bellatrix.Message == nil {
-			return 0, errors.New("no data message")
-		}
-		return v.Bellatrix.Message.Header.GasUsed, nil
-	case consensusspec.DataVersionCapella:
-		if v.Capella == nil {
-			return 0, errors.New("no data")
-		}
-		if v.Capella.Message == nil {
-			return 0, errors.New("no data message")
-		}
-		return v.Capella.Message.Header.GasUsed, nil
-	case consensusspec.DataVersionDeneb:
-		if v.Deneb == nil {
-			return 0, errors.New("no data")
-		}
-		if v.Deneb.Message == nil {
-			return 0, errors.New("no data message")
-		}
-		return v.Deneb.Message.Header.GasUsed, nil
-	default:
-		return 0, errors.New("unsupported version")
-	}
-}
-
-func (v *VersionedSignedBuilderBid) GasLimit() (uint64, error) {
-	if v == nil {
-		return 0, errors.New("nil struct")
-	}
-	switch v.Version {
-	case consensusspec.DataVersionBellatrix:
-		if v.Bellatrix == nil {
-			return 0, errors.New("no data")
-		}
-		if v.Bellatrix.Message == nil {
-			return 0, errors.New("no data message")
-		}
-		return v.Bellatrix.Message.Header.GasLimit, nil
-	case consensusspec.DataVersionCapella:
-		if v.Capella == nil {
-			return 0, errors.New("no data")
-		}
-		if v.Capella.Message == nil {
-			return 0, errors.New("no data message")
-		}
-		return v.Capella.Message.Header.GasLimit, nil
-	case consensusspec.DataVersionDeneb:
-		if v.Deneb == nil {
-			return 0, errors.New("no data")
-		}
-		if v.Deneb.Message == nil {
-			return 0, errors.New("no data message")
-		}
-		return v.Deneb.Message.Header.GasLimit, nil
-	default:
-		return 0, errors.New("unsupported version")
-	}
-}
-
-func (v *VersionedSignedBuilderBid) HashTreeRoot() ([32]byte, error) {
-	if v == nil {
-		return [32]byte{}, errors.New("nil struct")
-	}
-	switch v.Version {
-	case consensusspec.DataVersionBellatrix:
-		if v.Bellatrix == nil {
-			return [32]byte{}, errors.New("no data")
-		}
-		if v.Bellatrix.Message == nil {
-			return [32]byte{}, errors.New("no data message")
-		}
-		return v.Bellatrix.Message.HashTreeRoot()
-	case consensusspec.DataVersionCapella:
-		if v.Capella == nil {
-			return [32]byte{}, errors.New("no data")
-		}
-		if v.Capella.Message == nil {
-			return [32]byte{}, errors.New("no data message")
-		}
-		return v.Capella.Message.HashTreeRoot()
-	case consensusspec.DataVersionDeneb:
-		if v.Deneb == nil {
-			return [32]byte{}, errors.New("no data")
-		}
-		if v.Deneb.Message == nil {
-			return [32]byte{}, errors.New("no data message")
-		}
-		return v.Deneb.Message.HashTreeRoot()
-	default:
-		return [32]byte{}, errors.New("unsupported version")
-	}
-}
-
-func (v *VersionedSignedBuilderBid) BaseFeePerGas() ([32]byte, error) {
-	if v == nil {
-		return [32]byte{}, errors.New("nil struct")
-	}
-	switch v.Version {
-	case consensusspec.DataVersionBellatrix:
-		if v.Bellatrix == nil {
-			return [32]byte{}, errors.New("no data")
-		}
-		if v.Bellatrix.Message == nil {
-			return [32]byte{}, errors.New("no data message")
-		}
-		return v.Bellatrix.Message.Header.BaseFeePerGas, nil
-	case consensusspec.DataVersionCapella:
-		if v.Capella == nil {
-			return [32]byte{}, errors.New("no data")
-		}
-		if v.Capella.Message == nil {
-			return [32]byte{}, errors.New("no data message")
-		}
-		return v.Capella.Message.Header.BaseFeePerGas, nil
-	case consensusspec.DataVersionDeneb:
-		if v.Deneb == nil {
-			return [32]byte{}, errors.New("no data")
-		}
-		if v.Deneb.Message == nil {
-			return [32]byte{}, errors.New("no data message")
-		}
-		return v.Deneb.Message.Header.BaseFeePerGas.Bytes32(), nil
-	default:
-		return [32]byte{}, errors.New("unsupported version")
-	}
-}
-
-func (v *VersionedSignedBuilderBid) Random() ([32]byte, error) {
-	if v == nil {
-		return [32]byte{}, errors.New("nil struct")
-	}
-	switch v.Version {
-	case consensusspec.DataVersionBellatrix:
-		if v.Bellatrix == nil {
-			return [32]byte{}, errors.New("no data")
-		}
-		if v.Bellatrix.Message == nil {
-			return [32]byte{}, errors.New("no data message")
-		}
-		return v.Bellatrix.Message.Header.PrevRandao, nil
-	case consensusspec.DataVersionCapella:
-		if v.Capella == nil {
-			return [32]byte{}, errors.New("no data")
-		}
-		if v.Capella.Message == nil {
-			return [32]byte{}, errors.New("no data message")
-		}
-		return v.Capella.Message.Header.PrevRandao, nil
-	case consensusspec.DataVersionDeneb:
-		if v.Deneb == nil {
-			return [32]byte{}, errors.New("no data")
-		}
-		if v.Deneb.Message == nil {
-			return [32]byte{}, errors.New("no data message")
-		}
-		return v.Deneb.Message.Header.PrevRandao, nil
-	default:
-		return [32]byte{}, errors.New("unsupported version")
-	}
-}
 
 var (
 	ErrLength = fmt.Errorf("incorrect byte length")
@@ -211,8 +34,8 @@ type Coordinate struct {
 }
 
 type AuctionTranscript struct {
-	Bid        Bid                                            `json:"bid"`
-	Acceptance consensusapiv1capella.SignedBlindedBeaconBlock `json:"acceptance"`
+	Bid        Bid                                              `json:"bid"`
+	Acceptance consensusapiv1.VersionedSignedBlindedBeaconBlock `json:"acceptance"`
 }
 
 type BidContext struct {

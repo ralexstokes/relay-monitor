@@ -385,7 +385,19 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 
 	bid := transcript.Bid
 	signedBlindedBeaconBlock := &transcript.Acceptance
-	blindedBeaconBlock := signedBlindedBeaconBlock.Message
+	// blindedBeaconBlock := signedBlindedBeaconBlock.
+
+	proposerIndex, err := signedBlindedBeaconBlock.ProposerIndex()
+	if err != nil {
+		logger.Warnw("could not get proposer index from acceptance", "error", err, "acceptance", signedBlindedBeaconBlock)
+		return
+	}
+
+	slot, err := signedBlindedBeaconBlock.Slot()
+	if err != nil {
+		logger.Warnw("could not get slot from acceptance", "error", err, "acceptance", signedBlindedBeaconBlock)
+		return
+	}
 
 	publicKey, err := bid.Builder()
 	if err != nil {
@@ -399,15 +411,21 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 		return
 	}
 
+	signature, err := signedBlindedBeaconBlock.Signature()
+	if err != nil {
+		logger.Warnw("could not get signature from acceptance", "error", err, "acceptance", signedBlindedBeaconBlock)
+		return
+	}
+
 	// Verify signature first, to avoid doing unnecessary work in the event this is a "bad" transcript
-	proposerPublicKey, err := a.consensusClient.GetPublicKeyForIndex(ctx, uint64(blindedBeaconBlock.ProposerIndex))
+	proposerPublicKey, err := a.consensusClient.GetPublicKeyForIndex(ctx, uint64(proposerIndex))
 	if err != nil {
 		logger.Warnw("could not find public key for validator index", "error", err)
 		return
 	}
 
-	domain := a.consensusClient.SignatureDomain(blindedBeaconBlock.Slot)
-	valid, err := crypto.VerifySignature(signedBlindedBeaconBlock.Message, domain, proposerPublicKey[:], signedBlindedBeaconBlock.Signature[:])
+	domain := a.consensusClient.SignatureDomain(slot)
+	valid, err := crypto.VerifySignature(signedBlindedBeaconBlock, domain, proposerPublicKey[:], signature[:])
 	if err != nil {
 		logger.Warnw("error verifying signature from proposer; could not determine authenticity of transcript", "error", err, "bid", bid, "acceptance", signedBlindedBeaconBlock)
 		return
@@ -418,7 +436,7 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 	}
 
 	bidCtx := &types.BidContext{
-		Slot:              blindedBeaconBlock.Slot,
+		Slot:              slot,
 		ParentHash:        parentHash,
 		ProposerPublicKey: *proposerPublicKey,
 		RelayPublicKey:    types.PublicKey(publicKey),
