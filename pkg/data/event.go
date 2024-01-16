@@ -12,9 +12,9 @@ type Event struct {
 
 type BidEvent struct {
 	Context *types.BidContext `json:",omitempty"`
-	Bid     *types.Bid        `json:",omitempty"`
+	Bid     *types.Bid        `json:"-"`
 	// A `nil` `Bid` indicates absence for the given `Context`
-
+	Message interface{} `json:"Bid,omitempty"`
 }
 
 type ValidatorRegistrationEvent struct {

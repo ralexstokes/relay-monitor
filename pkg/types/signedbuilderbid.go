@@ -180,3 +180,37 @@ func (v *VersionedSignedBuilderBid) Random() ([32]byte, error) {
 		return [32]byte{}, errors.New("unsupported version")
 	}
 }
+
+func (v *VersionedSignedBuilderBid) Message() (interface{}, error) {
+	if v == nil {
+		return 0, errors.New("nil struct")
+	}
+	switch v.Version {
+	case consensusspec.DataVersionBellatrix:
+		if v.Bellatrix == nil {
+			return 0, errors.New("no data")
+		}
+		if v.Bellatrix.Message == nil {
+			return 0, errors.New("no data message")
+		}
+		return v.Bellatrix, nil
+	case consensusspec.DataVersionCapella:
+		if v.Capella == nil {
+			return 0, errors.New("no data")
+		}
+		if v.Capella.Message == nil {
+			return 0, errors.New("no data message")
+		}
+		return v.Capella, nil
+	case consensusspec.DataVersionDeneb:
+		if v.Deneb == nil {
+			return 0, errors.New("no data")
+		}
+		if v.Deneb.Message == nil {
+			return 0, errors.New("no data message")
+		}
+		return v.Deneb, nil
+	default:
+		return 0, errors.New("unsupported version")
+	}
+}

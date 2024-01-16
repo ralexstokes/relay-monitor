@@ -99,6 +99,7 @@ func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Clie
 	}
 
 	event.Bid = bid
+	event.Message, _ = bid.Message()
 
 	return event, nil
 }
