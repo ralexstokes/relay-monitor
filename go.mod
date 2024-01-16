@@ -6,6 +6,7 @@ require (
 	github.com/attestantio/go-builder-client v0.4.2
 	github.com/attestantio/go-eth2-client v0.19.7
 	github.com/cenkalti/backoff/v4 v4.2.1
+	github.com/confluentinc/confluent-kafka-go/v2 v2.3.0
 	github.com/ethereum/go-ethereum v1.13.8
 	github.com/flashbots/go-boost-utils v1.7.1
 	github.com/hashicorp/golang-lru v1.0.2
@@ -14,7 +15,6 @@ require (
 	github.com/protolambda/eth2api v0.0.0-20230316214135-5f8afbd6d05d
 	github.com/protolambda/zrnt v0.30.0
 	github.com/r3labs/sse/v2 v2.10.0
-	github.com/segmentio/kafka-go v0.4.47
 	go.uber.org/zap v1.26.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -40,7 +40,6 @@ require (
 	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
-	github.com/pierrec/lz4/v4 v4.1.19 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_model v0.5.0 // indirect
 	github.com/prometheus/common v0.45.0 // indirect
