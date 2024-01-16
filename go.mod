@@ -7,7 +7,6 @@ require (
 	github.com/attestantio/go-eth2-client v0.19.7
 	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/ethereum/go-ethereum v1.13.8
-	github.com/ferranbt/fastssz v0.1.3
 	github.com/flashbots/go-boost-utils v1.7.1
 	github.com/hashicorp/golang-lru v1.0.2
 	github.com/holiman/uint256 v1.2.4
@@ -27,6 +26,7 @@ require (
 	github.com/consensys/bavard v0.1.13 // indirect
 	github.com/consensys/gnark-crypto v0.12.1 // indirect
 	github.com/fatih/color v1.15.0 // indirect
+	github.com/ferranbt/fastssz v0.1.3 // indirect
 	github.com/go-playground/validator/v10 v10.11.1 // indirect
 	github.com/goccy/go-yaml v1.11.2 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
