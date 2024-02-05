@@ -5,7 +5,6 @@ import (
 	"math/big"
 
 	"github.com/attestantio/go-eth2-client/spec"
-	consensusspec "github.com/attestantio/go-eth2-client/spec"
 )
 
 type VersionedSignedBeaconBlock struct {
@@ -17,7 +16,7 @@ func (v *VersionedSignedBeaconBlock) GasUsed() (uint64, error) {
 		return 0, errors.New("nil struct")
 	}
 	switch v.Version {
-	case consensusspec.DataVersionBellatrix:
+	case spec.DataVersionBellatrix:
 		if v.Bellatrix == nil {
 			return 0, errors.New("no data")
 		}
@@ -25,7 +24,7 @@ func (v *VersionedSignedBeaconBlock) GasUsed() (uint64, error) {
 			return 0, errors.New("no data message")
 		}
 		return v.Bellatrix.Message.Body.ExecutionPayload.GasUsed, nil
-	case consensusspec.DataVersionCapella:
+	case spec.DataVersionCapella:
 		if v.Capella == nil {
 			return 0, errors.New("no data")
 		}
@@ -33,7 +32,7 @@ func (v *VersionedSignedBeaconBlock) GasUsed() (uint64, error) {
 			return 0, errors.New("no data message")
 		}
 		return v.Capella.Message.Body.ExecutionPayload.GasUsed, nil
-	case consensusspec.DataVersionDeneb:
+	case spec.DataVersionDeneb:
 		if v.Deneb == nil {
 			return 0, errors.New("no data")
 		}
@@ -51,7 +50,7 @@ func (v *VersionedSignedBeaconBlock) GasLimit() (uint64, error) {
 		return 0, errors.New("nil struct")
 	}
 	switch v.Version {
-	case consensusspec.DataVersionBellatrix:
+	case spec.DataVersionBellatrix:
 		if v.Bellatrix == nil {
 			return 0, errors.New("no data")
 		}
@@ -59,7 +58,7 @@ func (v *VersionedSignedBeaconBlock) GasLimit() (uint64, error) {
 			return 0, errors.New("no data message")
 		}
 		return v.Bellatrix.Message.Body.ExecutionPayload.GasLimit, nil
-	case consensusspec.DataVersionCapella:
+	case spec.DataVersionCapella:
 		if v.Capella == nil {
 			return 0, errors.New("no data")
 		}
@@ -67,7 +66,7 @@ func (v *VersionedSignedBeaconBlock) GasLimit() (uint64, error) {
 			return 0, errors.New("no data message")
 		}
 		return v.Capella.Message.Body.ExecutionPayload.GasLimit, nil
-	case consensusspec.DataVersionDeneb:
+	case spec.DataVersionDeneb:
 		if v.Deneb == nil {
 			return 0, errors.New("no data")
 		}
@@ -85,7 +84,7 @@ func (v *VersionedSignedBeaconBlock) BlockHash() (Hash, error) {
 		return Hash{}, errors.New("nil struct")
 	}
 	switch v.Version {
-	case consensusspec.DataVersionBellatrix:
+	case spec.DataVersionBellatrix:
 		if v.Bellatrix == nil {
 			return Hash{}, errors.New("no data")
 		}
@@ -93,7 +92,7 @@ func (v *VersionedSignedBeaconBlock) BlockHash() (Hash, error) {
 			return Hash{}, errors.New("no data message")
 		}
 		return v.Bellatrix.Message.Body.ExecutionPayload.BlockHash, nil
-	case consensusspec.DataVersionCapella:
+	case spec.DataVersionCapella:
 		if v.Capella == nil {
 			return Hash{}, errors.New("no data")
 		}
@@ -101,7 +100,7 @@ func (v *VersionedSignedBeaconBlock) BlockHash() (Hash, error) {
 			return Hash{}, errors.New("no data message")
 		}
 		return v.Capella.Message.Body.ExecutionPayload.BlockHash, nil
-	case consensusspec.DataVersionDeneb:
+	case spec.DataVersionDeneb:
 		if v.Deneb == nil {
 			return Hash{}, errors.New("no data")
 		}
@@ -121,7 +120,7 @@ func (v *VersionedSignedBeaconBlock) BaseFeePerGas() (*big.Int, error) {
 		return baseFee, errors.New("nil struct")
 	}
 	switch v.Version {
-	case consensusspec.DataVersionBellatrix:
+	case spec.DataVersionBellatrix:
 		if v.Bellatrix == nil {
 			return baseFee, errors.New("no data")
 		}
@@ -129,7 +128,7 @@ func (v *VersionedSignedBeaconBlock) BaseFeePerGas() (*big.Int, error) {
 			return baseFee, errors.New("no data message")
 		}
 		return baseFee.SetBytes(reverse(v.Bellatrix.Message.Body.ExecutionPayload.BaseFeePerGas[:])), nil
-	case consensusspec.DataVersionCapella:
+	case spec.DataVersionCapella:
 		if v.Capella == nil {
 			return baseFee, errors.New("no data")
 		}
@@ -137,7 +136,7 @@ func (v *VersionedSignedBeaconBlock) BaseFeePerGas() (*big.Int, error) {
 			return baseFee, errors.New("no data message")
 		}
 		return baseFee.SetBytes(reverse(v.Capella.Message.Body.ExecutionPayload.BaseFeePerGas[:])), nil
-	case consensusspec.DataVersionDeneb:
+	case spec.DataVersionDeneb:
 		if v.Deneb == nil {
 			return baseFee, errors.New("no data")
 		}
