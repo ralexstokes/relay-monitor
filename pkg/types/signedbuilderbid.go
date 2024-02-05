@@ -2,6 +2,7 @@ package types
 
 import (
 	"errors"
+	"math/big"
 
 	"github.com/attestantio/go-builder-client/spec"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
@@ -113,37 +114,38 @@ func (v *VersionedSignedBuilderBid) HashTreeRoot() ([32]byte, error) {
 	}
 }
 
-func (v *VersionedSignedBuilderBid) BaseFeePerGas() ([32]byte, error) {
+func (v *VersionedSignedBuilderBid) BaseFeePerGas() (*big.Int, error) {
+	baseFee := new(big.Int)
 	if v == nil {
-		return [32]byte{}, errors.New("nil struct")
+		return baseFee, errors.New("nil struct")
 	}
 	switch v.Version {
 	case consensusspec.DataVersionBellatrix:
 		if v.Bellatrix == nil {
-			return [32]byte{}, errors.New("no data")
+			return baseFee, errors.New("no data")
 		}
 		if v.Bellatrix.Message == nil {
-			return [32]byte{}, errors.New("no data message")
+			return baseFee, errors.New("no data message")
 		}
-		return v.Bellatrix.Message.Header.BaseFeePerGas, nil
+		return baseFee.SetBytes(reverse(v.Bellatrix.Message.Header.BaseFeePerGas[:])), nil
 	case consensusspec.DataVersionCapella:
 		if v.Capella == nil {
-			return [32]byte{}, errors.New("no data")
+			return baseFee, errors.New("no data")
 		}
 		if v.Capella.Message == nil {
-			return [32]byte{}, errors.New("no data message")
+			return baseFee, errors.New("no data message")
 		}
-		return v.Capella.Message.Header.BaseFeePerGas, nil
+		return baseFee.SetBytes(reverse(v.Capella.Message.Header.BaseFeePerGas[:])), nil
 	case consensusspec.DataVersionDeneb:
 		if v.Deneb == nil {
-			return [32]byte{}, errors.New("no data")
+			return baseFee, errors.New("no data")
 		}
 		if v.Deneb.Message == nil {
-			return [32]byte{}, errors.New("no data message")
+			return baseFee, errors.New("no data message")
 		}
-		return v.Deneb.Message.Header.BaseFeePerGas.Bytes32(), nil
+		return baseFee.SetBytes(v.Deneb.Message.Header.BaseFeePerGas.Bytes()), nil
 	default:
-		return [32]byte{}, errors.New("unsupported version")
+		return baseFee, errors.New("unsupported version")
 	}
 }
 

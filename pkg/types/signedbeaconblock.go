@@ -144,7 +144,7 @@ func (v *VersionedSignedBeaconBlock) BaseFeePerGas() (*big.Int, error) {
 		if v.Deneb.Message == nil {
 			return baseFee, errors.New("no data message")
 		}
-		return v.Deneb.Message.Body.ExecutionPayload.BaseFeePerGas.ToBig(), nil
+		return baseFee.SetBytes(v.Deneb.Message.Body.ExecutionPayload.BaseFeePerGas.Bytes()), nil
 	default:
 		return baseFee, errors.New("unsupported version")
 	}

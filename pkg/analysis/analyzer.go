@@ -306,16 +306,16 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 	}
 
 	baseFee := uint256.NewInt(0)
-	baseFee.SetBytes(reverse(baseFeePerGas[:]))
+	baseFee.SetFromBig(baseFeePerGas)
 
 	fmt.Println("-----------------")
 
-	test := uint256.NewInt(0).SetBytes(baseFeePerGas[:])
+	// test := uint256.NewInt(0).SetBytes(baseFeePerGas[:])
 
-	fmt.Println(baseFeePerGas)
-	fmt.Println(expectedBaseFee)
 	fmt.Println(baseFee)
-	fmt.Println(test)
+	fmt.Println(expectedBaseFee.ToBig())
+	fmt.Println(baseFee)
+	// fmt.Println(test)
 	fmt.Println("-----------------")
 
 	if !expectedBaseFee.Eq(baseFee) {
