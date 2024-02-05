@@ -122,7 +122,7 @@ type ValidatorResponse struct {
 	Index phase0.ValidatorIndex `json:"index"`
 	// Current validator balance in gwei
 	Balance phase0.Gwei `json:"balance"`
-	// TODO
+	// Validator status
 	Status ValidatorStatus `json:"status"`
 	// The validator as defined in the registry in the BeaconState
 	Validator phase0.Validator `json:"validator"`

@@ -94,17 +94,6 @@ func (a *Analyzer) validateGasLimit(ctx context.Context, gasLimit uint64, gasLim
 	return gasLimit == expectedBound, nil
 }
 
-// borrowed from `flashbots/go-boost-utils`
-func reverse(src []byte) []byte {
-	dst := make([]byte, len(src))
-	copy(dst, src)
-	for i := len(dst)/2 - 1; i >= 0; i-- {
-		opp := len(dst) - 1 - i
-		dst[i], dst[opp] = dst[opp], dst[i]
-	}
-	return dst
-}
-
 func (a *Analyzer) outputValidationError(validationError *InvalidBid) {
 	if validationError == nil || validationError.Reason == "" {
 		return
@@ -308,16 +297,6 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 	baseFee := uint256.NewInt(0)
 	baseFee.SetFromBig(baseFeePerGas)
 
-	fmt.Println("-----------------")
-
-	// test := uint256.NewInt(0).SetBytes(baseFeePerGas[:])
-
-	fmt.Println(baseFee)
-	fmt.Println(expectedBaseFee.ToBig())
-	fmt.Println(baseFee)
-	// fmt.Println(test)
-	fmt.Println("-----------------")
-
 	if !expectedBaseFee.Eq(baseFee) {
 		invalidBidErr.Reason = "invalid base fee"
 		invalidBidErr.Context[ExpectedKey] = expectedBaseFee
@@ -398,7 +377,6 @@ func (a *Analyzer) processAuctionTranscript(ctx context.Context, event data.Auct
 
 	bid := transcript.Bid
 	signedBlindedBeaconBlock := &transcript.Acceptance
-	// blindedBeaconBlock := signedBlindedBeaconBlock.
 
 	proposerIndex, err := signedBlindedBeaconBlock.ProposerIndex()
 	if err != nil {

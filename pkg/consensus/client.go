@@ -21,10 +21,7 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/protolambda/eth2api"
-	"github.com/protolambda/zrnt/eth2/beacon/bellatrix"
-	"github.com/protolambda/zrnt/eth2/beacon/capella"
 	"github.com/protolambda/zrnt/eth2/beacon/common"
-	"github.com/protolambda/zrnt/eth2/beacon/deneb"
 	"github.com/r3labs/sse/v2"
 	"github.com/ralexstokes/relay-monitor/pkg/crypto"
 	"github.com/ralexstokes/relay-monitor/pkg/metrics"
@@ -51,7 +48,6 @@ type ValidatorInfo struct {
 
 type Client struct {
 	logger *zap.Logger
-	// client *eth2api.Eth2HttpClient
 	client *eth2HttpApi.Service
 
 	SlotsPerEpoch         uint64
@@ -84,17 +80,6 @@ type Client struct {
 }
 
 func NewClient(ctx context.Context, endpoint string, logger *zap.Logger) (*Client, error) {
-	// httpClient := &eth2api.Eth2HttpClient{
-	// 	Addr: endpoint,
-	// 	Cli: &http.Client{
-	// 		Transport: &http.Transport{
-	// 			MaxIdleConnsPerHost: 128,
-	// 		},
-	// 		Timeout: clientTimeoutSec * time.Second,
-	// 	},
-	// 	Codec: eth2api.JSONCodec{},
-	// }
-
 	eth2Service, err := eth2HttpApi.New(ctx, eth2HttpApi.WithTimeout(clientTimeoutSec*time.Second), eth2HttpApi.WithAddress(endpoint))
 	if err != nil {
 		return nil, err
@@ -208,19 +193,9 @@ func (c *Client) LoadCurrentContext(ctx context.Context, currentSlot types.Slot,
 func (c *Client) FetchGenesis(ctx context.Context) error {
 
 	rsp, err := c.client.Genesis(ctx, &eth2Api.GenesisOpts{})
-
-	// var resp eth2api.GenesisResponse
-	// exists, err := beaconapi.Genesis(ctx, c.client, &resp)
-	// if !exists {
-	// 	return fmt.Errorf("genesis information does not exist")
-	// }
 	if err != nil {
 		return err
 	}
-
-	// c.GenesisTime = uint64(resp.GenesisTime)
-	// c.genesisForkVersion = types.ForkVersion(resp.GenesisForkVersion)
-	// c.GenesisValidatorsRoot = types.Root(resp.GenesisValidatorsRoot)
 
 	c.GenesisTime = uint64(rsp.Data.GenesisTime.Unix())
 	c.genesisForkVersion = types.ForkVersion(rsp.Data.GenesisForkVersion)
@@ -230,10 +205,10 @@ func (c *Client) FetchGenesis(ctx context.Context) error {
 }
 
 func (c *Client) fetchSpec(ctx context.Context) error {
-	// var spec common.Spec
-	// configapi.Spec(ctx, c.client, &spec)
-
-	rsp, _ := c.client.Spec(ctx, &eth2Api.SpecOpts{})
+	rsp, err := c.client.Spec(ctx, &eth2Api.SpecOpts{})
+	if err != nil {
+		return err
+	}
 
 	c.SlotsPerEpoch = rsp.Data["SLOTS_PER_EPOCH"].(uint64)
 	c.SecondsPerSlot = uint64(rsp.Data["SECONDS_PER_SLOT"].(time.Duration).Seconds())
@@ -245,16 +220,6 @@ func (c *Client) fetchSpec(ctx context.Context) error {
 	c.capellaForkEpoch = rsp.Data["CAPELLA_FORK_EPOCH"].(types.Epoch)
 	c.denebForkVersion = rsp.Data["DENEB_FORK_VERSION"].(types.ForkVersion)
 	c.denebForkEpoch = rsp.Data["DENEB_FORK_EPOCH"].(types.Epoch)
-	// c.altairForkEpoch = types.Epoch(spec.Config.ALTAIR_FORK_EPOCH)
-
-	// c.bellatrixForkVersion = types.ForkVersion(spec.Config.BELLATRIX_FORK_VERSION)
-	// c.bellatrixForkEpoch = types.Epoch(spec.Config.BELLATRIX_FORK_EPOCH)
-
-	// c.capellaForkVersion = types.ForkVersion(spec.Config.CAPELLA_FORK_VERSION)
-	// c.capellaForkEpoch = types.Epoch(spec.Config.CAPELLA_FORK_EPOCH)
-
-	// c.denebForkVersion = types.ForkVersion(spec.Config.DENEB_FORK_VERSION)
-	// c.denebForkEpoch = types.Epoch(spec.Config.DENEB_FORK_EPOCH)
 
 	return nil
 }
@@ -321,15 +286,6 @@ func (c *Client) GetValidator(publicKey *types.PublicKey) (*types.ValidatorRespo
 			return nil, err
 		}
 
-		// filter := eth2api.ValidatorIdPubkey(x)
-		// exists, err := beaconapi.StateValidator(context.Background(), c.client, eth2api.StateHead, filter, validator)
-		// if err != nil {
-		// 	return nil, err
-		// }
-		// if !exists {
-		// 	return nil, fmt.Errorf("could not fetch validators from remote endpoint because they do not exist")
-		// }
-
 		validatorRsp, err := c.client.Validators(context.Background(), &eth2Api.ValidatorsOpts{PubKeys: []phase0.BLSPubKey{phase0.BLSPubKey(*publicKey)}})
 		if err != nil {
 			return nil, err
@@ -338,8 +294,6 @@ func (c *Client) GetValidator(publicKey *types.PublicKey) (*types.ValidatorRespo
 		for k, v := range validatorRsp.Data {
 			publicKey := v.Validator.PublicKey
 			key := types.PublicKey(publicKey)
-			// c.validatorCache[key] = validator.Data[0].Validator
-			// c.validatorIndexCache[uint64(validator.Data[0].Index)] = &key
 
 			validator = &types.ValidatorResponse{
 				Index:     k,
@@ -351,18 +305,6 @@ func (c *Client) GetValidator(publicKey *types.PublicKey) (*types.ValidatorRespo
 			c.validatorCache[key] = validator
 			c.validatorIndexCache[uint64(k)] = &key
 		}
-
-		// publicKey := validator.Data[0].Validator.PublicKey
-		// key := types.PublicKey(publicKey)
-		// c.validatorCache[key] = validator.Data[0].Validator
-		// c.validatorIndexCache[uint64(validator.Data[0].Index)] = &key
-
-		// validator.Data[0].
-
-		// publicKey := validator.Validator.Pubkey
-		// key := types.PublicKey(publicKey)
-		// c.validatorCache[key] = validator
-		// c.validatorIndexCache[uint64(validator.Index)] = &key
 	}
 	return validator, nil
 }
@@ -395,22 +337,6 @@ func (c *Client) GetProposerPublicKey(ctx context.Context, slot types.Slot) (*ty
 }
 
 func (c *Client) FetchProposers(ctx context.Context, epoch types.Epoch) error {
-	// var proposerDuties eth2api.DependentProposerDuty
-	// syncing, err := validatorapi.ProposerDuties(ctx, c.client, common.Epoch(epoch), &proposerDuties)
-	// if syncing {
-	// 	return fmt.Errorf("could not fetch proposal duties in epoch %d because node is syncing", epoch)
-	// } else if err != nil {
-	// 	return err
-	// }
-
-	// // TODO handle reorgs, etc.
-	// for _, duty := range proposerDuties.Data {
-	// 	c.proposerCache.Add(uint64(duty.Slot), ValidatorInfo{
-	// 		publicKey: types.PublicKey(duty.Pubkey),
-	// 		index:     uint64(duty.ValidatorIndex),
-	// 	})
-	// }
-
 	syncState, err := c.client.NodeSyncing(ctx, &eth2Api.NodeSyncingOpts{})
 	if err != nil {
 		return err
@@ -437,9 +363,6 @@ func (c *Client) FetchProposers(ctx context.Context, epoch types.Epoch) error {
 
 func (c *Client) FetchBlockRequest(ctx context.Context, slot types.Slot) (*spec.VersionedSignedBeaconBlock, error) {
 	blockID := eth2api.BlockIdSlot(slot)
-	// exists, err := beaconapi.BlockV2(ctx, c.client, blockID, dest)
-	// return exists, err
-
 	block, err := c.client.SignedBeaconBlock(ctx, &eth2Api.SignedBeaconBlockOpts{Block: blockID.BlockId()})
 	if err != nil {
 		return nil, err
@@ -466,12 +389,6 @@ func (c *Client) RetryBlockRequest(ctx context.Context, slot types.Slot) (*spec.
 		if err != nil {
 			return err
 		}
-
-		// if exists {
-		// 	return nil
-		// } else {
-		// 	return fmt.Errorf("could not find block for slot %d", slot)
-		// }
 		return nil
 	}, b)
 
@@ -494,12 +411,10 @@ func (c *Client) RetryBlockRequest(ctx context.Context, slot types.Slot) (*spec.
 
 func (c *Client) FetchBlock(ctx context.Context, slot types.Slot) error {
 	// TODO handle reorgs, etc.
-	// var signedBeaconBlock eth2api.VersionedSignedBeaconBlock
 	var signedBeaconBlock *spec.VersionedSignedBeaconBlock
 	var err error
 
 	signedBeaconBlock, err = c.FetchBlockRequest(ctx, slot)
-	// NOTE: need to check `exists` first...
 	if err != nil {
 		signedBeaconBlock, err = c.RetryBlockRequest(ctx, slot)
 		if err != nil {
@@ -520,66 +435,6 @@ func (c *Client) FetchBlock(ctx context.Context, slot types.Slot) error {
 
 	c.blockNumberToSlotIndex.Add(blockNumber, slot)
 	return nil
-}
-
-func (c *Client) getBlockNumber(signedBlock eth2api.SignedBeaconBlock) (uint64, error) {
-	var blockNumber uint64
-	switch block := signedBlock.(type) {
-	case *bellatrix.SignedBeaconBlock:
-		blockNumber = uint64(block.Message.Body.ExecutionPayload.BlockNumber)
-	case *capella.SignedBeaconBlock:
-		blockNumber = uint64(block.Message.Body.ExecutionPayload.BlockNumber)
-	case *deneb.SignedBeaconBlock:
-		blockNumber = uint64(block.Message.Body.ExecutionPayload.BlockNumber)
-	default:
-		return 0, fmt.Errorf("unexpected block type %T", block)
-	}
-
-	return blockNumber, nil
-}
-
-func (c *Client) getBlockHash(signedBlock eth2api.SignedBeaconBlock) (types.Hash, error) {
-	var blockHash types.Hash
-	switch block := signedBlock.(type) {
-	case *bellatrix.SignedBeaconBlock:
-		blockHash = types.Hash(block.Message.Body.ExecutionPayload.BlockHash)
-	case *capella.SignedBeaconBlock:
-		blockHash = types.Hash(block.Message.Body.ExecutionPayload.BlockHash)
-	case *deneb.SignedBeaconBlock:
-		blockHash = types.Hash(block.Message.Body.ExecutionPayload.BlockHash)
-	default:
-		return types.Hash{}, fmt.Errorf("unexpected block type %T", block)
-	}
-
-	return blockHash, nil
-}
-
-type GasDetails struct {
-	GasLimit      uint64
-	GasUsed       uint64
-	BaseFeePerGas uint256.Int
-}
-
-func (c *Client) getGasDetails(versionedBlock eth2api.SignedBeaconBlock) (*GasDetails, error) {
-	gasDetails := &GasDetails{}
-	switch block := versionedBlock.(type) {
-	case *bellatrix.SignedBeaconBlock:
-		gasDetails.GasLimit = uint64(block.Message.Body.ExecutionPayload.GasLimit)
-		gasDetails.GasUsed = uint64(block.Message.Body.ExecutionPayload.GasUsed)
-		gasDetails.BaseFeePerGas = (uint256.Int)(block.Message.Body.ExecutionPayload.BaseFeePerGas)
-	case *capella.SignedBeaconBlock:
-		gasDetails.GasLimit = uint64(block.Message.Body.ExecutionPayload.GasLimit)
-		gasDetails.GasUsed = uint64(block.Message.Body.ExecutionPayload.GasUsed)
-		gasDetails.BaseFeePerGas = (uint256.Int)(block.Message.Body.ExecutionPayload.BaseFeePerGas)
-	case *deneb.SignedBeaconBlock:
-		gasDetails.GasLimit = uint64(block.Message.Body.ExecutionPayload.GasLimit)
-		gasDetails.GasUsed = uint64(block.Message.Body.ExecutionPayload.GasUsed)
-		gasDetails.BaseFeePerGas = (uint256.Int)(block.Message.Body.ExecutionPayload.BaseFeePerGas)
-	default:
-		return nil, fmt.Errorf("unexpected block type %T", block)
-	}
-
-	return gasDetails, nil
 }
 
 type headEvent struct {
@@ -618,52 +473,6 @@ func (c *Client) StreamHeads(ctx context.Context) <-chan types.Coordinate {
 	return ch
 }
 
-// TODO handle reorgs
-// func (c *Client) FetchValidators(ctx context.Context, validatorIds []eth2api.ValidatorId, statusFilter []eth2api.ValidatorStatus) error {
-// 	// var response []eth2api.ValidatorResponse
-// 	// exists, err := beaconapi.StateValidators(ctx, c.client, eth2api.StateHead, validatorIds, statusFilter, &response)
-// 	// if err != nil {
-// 	// 	return err
-// 	// }
-// 	// if !exists {
-// 	// 	return fmt.Errorf("could not fetch validators from remote endpoint because they do not exist")
-// 	// }
-
-// 	// c.validatorLock.Lock()
-// 	// defer c.validatorLock.Unlock()
-
-// 	// for _, validator := range response {
-// 	// 	publicKey := validator.Validator.Pubkey
-// 	// 	key := types.PublicKey(publicKey)
-// 	// 	c.validatorCache[key] = &validator
-// 	// 	c.validatorIndexCache[uint64(validator.Index)] = &key
-// 	// }
-
-// 	validatorRsp, err := c.client.Validators(context.Background(), &eth2Api.ValidatorsOpts{PubKeys: []phase0.BLSPubKey{phase0.BLSPubKey(*publicKey)}})
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	for k, v := range validatorRsp.Data {
-// 		publicKey := v.Validator.PublicKey
-// 		key := types.PublicKey(publicKey)
-// 		// c.validatorCache[key] = validator.Data[0].Validator
-// 		// c.validatorIndexCache[uint64(validator.Data[0].Index)] = &key
-
-// 		validator = &types.ValidatorResponse{
-// 			Index:     k,
-// 			Balance:   v.Validator.EffectiveBalance,
-// 			Validator: *v.Validator,
-// 			Status:    types.ValidatorStatus(v.Status.String()),
-// 		}
-
-// 		c.validatorCache[key] = validator
-// 		c.validatorIndexCache[uint64(k)] = &key
-// 	}
-
-// 	return nil
-// }
-
 func (c *Client) GetValidatorStatus(publicKey *types.PublicKey) (ValidatorStatus, error) {
 	validator, err := c.GetValidator(publicKey)
 	if err != nil {
@@ -680,7 +489,6 @@ func (c *Client) GetValidatorStatus(publicKey *types.PublicKey) (ValidatorStatus
 }
 
 func (c *Client) GetRandomnessForProposal(slot types.Slot /*, proposerPublicKey *types.PublicKey */) (types.Hash, error) {
-	// targetSlot := slot - 1
 
 	// TODO support branches w/ proposer public key
 	// TODO pipe in context
@@ -691,8 +499,6 @@ func (c *Client) GetRandomnessForProposal(slot types.Slot /*, proposerPublicKey 
 		return types.Hash{}, nil
 	}
 
-	// return FetchRandao(context.Background(), c.client, targetSlot)
-
 	return phase0.Hash32(*apiRsp.Data), nil
 }
 
@@ -702,11 +508,6 @@ func (c *Client) GetBlockNumberForProposal(slot types.Slot /*, proposerPublicKey
 	if err != nil {
 		return 0, err
 	}
-
-	// blockNumber, err := c.getBlockNumber(parentBlock)
-	// if err != nil {
-	// 	return 0, err
-	// }
 
 	blockNumber, err := parentBlock.ExecutionBlockNumber()
 	if err != nil {
@@ -752,15 +553,6 @@ func (c *Client) GetBaseFeeForProposal(slot types.Slot /*, proposerPublicKey *ty
 		return nil, err
 	}
 
-	// parentGasDetails, err := c.getGasDetails(parentBlock)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// gasDetails.GasLimit = uint64(block.Message.Body.ExecutionPayload.GasLimit)
-	// gasDetails.GasUsed = uint64(block.Message.Body.ExecutionPayload.GasUsed)
-	// gasDetails.BaseFeePerGas = (uint256.Int)(block.Message.Body.ExecutionPayload.BaseFeePerGas)
-
 	parentGasLimit, err := parentBlock.GasLimit()
 	if err != nil {
 		return nil, err
@@ -794,12 +586,6 @@ func (c *Client) GetParentGasLimit(ctx context.Context, blockNumber uint64) (uin
 	if err != nil {
 		return 0, err
 	}
-
-	// gasDetails, err := c.getGasDetails(parentBlock)
-	// if err != nil {
-	// 	return 0, err
-	// }
-
 	return parentBlock.GasLimit()
 }
 
