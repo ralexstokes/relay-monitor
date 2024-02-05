@@ -126,10 +126,10 @@ func (a *Analyzer) outputValidationError(validationError *InvalidBid) {
 		}
 
 		out := &data.ValidationOutput{
-			Timestamp:      time.Unix(a.clock.SlotInSeconds(validationError.Context[SlotKey].(types.Slot)), 0),
+			Timestamp:      time.Unix(a.clock.SlotInSeconds(types.Slot(validationError.Context[SlotKey].(uint64))), 0),
 			Region:         a.region,
 			RelayPublicKey: validationError.Context[RelayerPubKey].(types.PublicKey).String(),
-			Slot:           validationError.Context[SlotKey].(types.Slot),
+			Slot:           types.Slot(validationError.Context[SlotKey].(uint64)),
 			Error: &data.ValidationErr{
 				Type:     validationError.Context[ErrTypeKey].(types.ErrorType),
 				Reason:   validationError.Reason,
@@ -304,8 +304,20 @@ func (a *Analyzer) validateBid(ctx context.Context, bidCtx *types.BidContext, bi
 	if err != nil {
 		return nil, err
 	}
+
 	baseFee := uint256.NewInt(0)
 	baseFee.SetBytes(reverse(baseFeePerGas[:]))
+
+	fmt.Println("-----------------")
+
+	test := uint256.NewInt(0).SetBytes(baseFeePerGas[:])
+
+	fmt.Println(baseFeePerGas)
+	fmt.Println(expectedBaseFee)
+	fmt.Println(baseFee)
+	fmt.Println(test)
+	fmt.Println("-----------------")
+
 	if !expectedBaseFee.Eq(baseFee) {
 		invalidBidErr.Reason = "invalid base fee"
 		invalidBidErr.Context[ExpectedKey] = expectedBaseFee

@@ -116,3 +116,31 @@ func (s *VersionString) UnmarshalJSON(b []byte) error {
 	*s = VersionString(b[1 : len(b)-1])
 	return nil
 }
+
+type ValidatorResponse struct {
+	// Index of validator in validator registry.
+	Index phase0.ValidatorIndex `json:"index"`
+	// Current validator balance in gwei
+	Balance phase0.Gwei `json:"balance"`
+	// TODO
+	Status ValidatorStatus `json:"status"`
+	// The validator as defined in the registry in the BeaconState
+	Validator phase0.Validator `json:"validator"`
+}
+
+// TODO enum with or without additional values?
+type ValidatorStatus string
+
+func (vs ValidatorStatus) String() string {
+	return string(vs)
+}
+
+func reverse(src []byte) []byte {
+	dst := make([]byte, len(src))
+	copy(dst, src)
+	for i := len(dst)/2 - 1; i >= 0; i-- {
+		opp := len(dst) - 1 - i
+		dst[i], dst[opp] = dst[opp], dst[i]
+	}
+	return dst
+}
