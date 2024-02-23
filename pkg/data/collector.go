@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
 	"github.com/ralexstokes/relay-monitor/pkg/output"
@@ -40,7 +41,7 @@ func (c *Collector) outputBid(event *BidEvent, duration *uint64, relay *builder.
 		logger := c.logger.Sugar()
 
 		out := &BidOutput{
-			Timestamp: time.Unix(c.clock.SlotInSeconds(event.Context.Slot), 0),
+			Timestamp: time.Unix(c.clock.SlotInSeconds(phase0.Slot(event.Context.Slot)), 0),
 			Rtt:       *duration,
 			Bid:       *event,
 			Relay:     relay.Endpoint(),
@@ -64,7 +65,7 @@ func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Clie
 	var bid *types.Bid
 
 	bidCtx := types.BidContext{
-		Slot:           slot,
+		Slot:           uint64(slot),
 		RelayPublicKey: relay.PublicKey,
 	}
 
@@ -98,6 +99,7 @@ func (c *Collector) collectBidFromRelay(ctx context.Context, relay *builder.Clie
 	}
 
 	event.Bid = bid
+	event.Message, _ = bid.Message()
 
 	return event, nil
 }

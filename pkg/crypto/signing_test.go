@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	boostTypes "github.com/flashbots/go-boost-utils/types"
+	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/ralexstokes/relay-monitor/pkg/crypto"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
 )
@@ -22,8 +22,8 @@ var (
 func TestCanComputeDomain(t *testing.T) {
 	genesisForkVersion := [4]byte{}
 	binary.BigEndian.PutUint32(genesisForkVersion[0:4], sepoliaGenesisForkVersionAsNumber)
-	domain := boostTypes.ComputeDomain(boostTypes.DomainTypeAppBuilder, genesisForkVersion, types.Root{})
-	correctDomain := boostTypes.ComputeDomain(boostTypes.DomainTypeAppBuilder, sepoliaGenesisForkVersion, types.Root{})
+	domain := ssz.ComputeDomain(ssz.DomainTypeAppBuilder, genesisForkVersion, types.Root{})
+	correctDomain := ssz.ComputeDomain(ssz.DomainTypeAppBuilder, sepoliaGenesisForkVersion, types.Root{})
 	if domain != correctDomain {
 		t.Fatal("could not compute correct domain")
 	}
@@ -38,7 +38,7 @@ func TestSignatureVerification(t *testing.T) {
 
 	genesisForkVersion := [4]byte{}
 	binary.BigEndian.PutUint32(genesisForkVersion[0:4], sepoliaGenesisForkVersionAsNumber)
-	domain := boostTypes.ComputeDomain(boostTypes.DomainTypeAppBuilder, genesisForkVersion, types.Root{})
+	domain := ssz.ComputeDomain(ssz.DomainTypeAppBuilder, genesisForkVersion, types.Root{})
 
 	valid, err := crypto.VerifySignature(registration.Message, domain, registration.Message.Pubkey[:], registration.Signature[:])
 	if err != nil {
