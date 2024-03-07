@@ -45,7 +45,7 @@ func (s *MemoryStore) GetBid(ctx context.Context, bidCtx *types.BidContext) (*ty
 }
 
 func (s *MemoryStore) PutValidatorRegistration(ctx context.Context, registration *types.SignedValidatorRegistration) error {
-	publicKey := registration.Message.Pubkey
+	publicKey := types.PublicKey(registration.Message.Pubkey)
 	registrations := s.registrations[publicKey]
 	registrations = append(registrations, *registration)
 	s.registrations[publicKey] = registrations

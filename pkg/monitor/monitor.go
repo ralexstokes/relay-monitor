@@ -8,8 +8,10 @@ import (
 	"github.com/ralexstokes/relay-monitor/pkg/analysis"
 	"github.com/ralexstokes/relay-monitor/pkg/api"
 	"github.com/ralexstokes/relay-monitor/pkg/builder"
+	"github.com/ralexstokes/relay-monitor/pkg/config"
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
 	"github.com/ralexstokes/relay-monitor/pkg/data"
+	"github.com/ralexstokes/relay-monitor/pkg/output"
 	"github.com/ralexstokes/relay-monitor/pkg/store"
 	"go.uber.org/zap"
 )
@@ -22,12 +24,13 @@ type Monitor struct {
 	api       *api.Server
 	collector *data.Collector
 	analyzer  *analysis.Analyzer
+	output    *output.Output
 }
 
 func parseRelaysFromEndpoint(logger *zap.SugaredLogger, relayEndpoints []string) []*builder.Client {
 	var relays []*builder.Client
 	for _, endpoint := range relayEndpoints {
-		relay, err := builder.NewClient(endpoint)
+		relay, err := builder.NewClient(endpoint, logger)
 		if err != nil {
 			logger.Warnf("could not instantiate relay at %s: %v", endpoint, err)
 			continue
@@ -47,37 +50,45 @@ func parseRelaysFromEndpoint(logger *zap.SugaredLogger, relayEndpoints []string)
 	return relays
 }
 
-func New(ctx context.Context, config *Config, zapLogger *zap.Logger) (*Monitor, error) {
+func New(ctx context.Context, appConf *config.Config, zapLogger *zap.Logger) (*Monitor, error) {
 	logger := zapLogger.Sugar()
 
-	relays := parseRelaysFromEndpoint(logger, config.Relays)
+	fileOutput, err := output.NewFileOutput(ctx, appConf.Output.Path, appConf.Kafka)
+	if err != nil {
+		return nil, fmt.Errorf("could not create output file: %v", err)
+	}
 
-	consensusClient, err := consensus.NewClient(ctx, config.Consensus.Endpoint, zapLogger)
+	relays := parseRelaysFromEndpoint(logger, appConf.Relays)
+
+	consensusClient, err := consensus.NewClient(ctx, appConf.Consensus.Endpoint, zapLogger)
 	if err != nil {
 		return nil, fmt.Errorf("could not instantiate consensus client: %v", err)
 	}
 
 	clock := consensus.NewClock(consensusClient.GenesisTime, consensusClient.SecondsPerSlot, consensusClient.SlotsPerEpoch)
 	now := time.Now().Unix()
-	currentSlot := clock.CurrentSlot(now)
+
+	// Start with the last slot for stability
+	currentSlot := clock.CurrentSlot(now) - 1
 	currentEpoch := clock.EpochForSlot(currentSlot)
 
 	err = consensusClient.LoadCurrentContext(ctx, currentSlot, currentEpoch)
 	if err != nil {
-		logger.Warn("could not load the current context from the consensus client")
+		logger.Panic("could not load the current context from the consensus client")
 	}
 
 	events := make(chan data.Event, eventBufferSize)
-	collector := data.NewCollector(zapLogger, relays, clock, consensusClient, events)
+	collector := data.NewCollector(zapLogger, relays, clock, consensusClient, fileOutput, appConf.Region, events)
 	store := store.NewMemoryStore()
-	analyzer := analysis.NewAnalyzer(zapLogger, relays, events, store, consensusClient, clock)
+	analyzer := analysis.NewAnalyzer(zapLogger, relays, events, store, consensusClient, clock, fileOutput, appConf.Region)
 
-	apiServer := api.New(config.Api, zapLogger, analyzer, events, clock, store, consensusClient)
+	apiServer := api.New(appConf.Api, zapLogger, analyzer, events, clock, store, consensusClient)
 	return &Monitor{
 		logger:    zapLogger,
 		api:       apiServer,
 		collector: collector,
 		analyzer:  analyzer,
+		output:    fileOutput,
 	}, nil
 }
 
@@ -101,4 +112,11 @@ func (s *Monitor) Run(ctx context.Context) {
 	if err != nil {
 		logger.Warn("error running API server: %v", err)
 	}
+}
+
+func (s *Monitor) Stop() {
+	logger := s.logger.Sugar()
+	logger.Info("Shutting down monitor...")
+
+	s.output.Close()
 }

@@ -9,7 +9,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/ralexstokes/relay-monitor/pkg/analysis"
+	"github.com/ralexstokes/relay-monitor/pkg/config"
 	"github.com/ralexstokes/relay-monitor/pkg/consensus"
 	"github.com/ralexstokes/relay-monitor/pkg/crypto"
 	"github.com/ralexstokes/relay-monitor/pkg/data"
@@ -23,13 +25,11 @@ const (
 	GetFaultEndpoint                = "/monitor/v1/faults"
 	RegisterValidatorEndpoint       = "/eth/v1/builder/validators"
 	PostAuctionTranscriptEndpoint   = "/monitor/v1/transcript"
+	MetricsEndpoint                 = "/metrics"
+	AliveEndpoint                   = "/alive"
+	ReadyEndpoint                   = "/ready"
 	DefaultEpochSpanForFaultsWindow = 256
 )
-
-type Config struct {
-	Host string `yaml:"host"`
-	Port uint16 `yaml:"port"`
-}
 
 type Span struct {
 	Start types.Epoch `json:"start_epoch,string"`
@@ -42,8 +42,8 @@ type FaultsResponse struct {
 }
 
 type Server struct {
-	config *Config
-	logger *zap.Logger
+	appConf *config.ApiConfig
+	logger  *zap.Logger
 
 	analyzer        *analysis.Analyzer
 	events          chan<- data.Event
@@ -52,9 +52,9 @@ type Server struct {
 	consensusClient *consensus.Client
 }
 
-func New(config *Config, logger *zap.Logger, analyzer *analysis.Analyzer, events chan<- data.Event, clock *consensus.Clock, store store.Storer, consensusClient *consensus.Client) *Server {
+func New(appConf *config.ApiConfig, logger *zap.Logger, analyzer *analysis.Analyzer, events chan<- data.Event, clock *consensus.Clock, store store.Storer, consensusClient *consensus.Client) *Server {
 	return &Server{
-		config:          config,
+		appConf:         appConf,
 		logger:          logger,
 		analyzer:        analyzer,
 		events:          events,
@@ -175,14 +175,14 @@ func (s *Server) handleFaultsRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) validateRegistrationTimestamp(registration, currentRegistration *types.SignedValidatorRegistration) error {
-	timestamp := registration.Message.Timestamp
+	timestamp := registration.Message.Timestamp.Unix()
 	deadline := time.Now().Add(10 * time.Second).Unix()
-	if timestamp >= uint64(deadline) {
+	if timestamp >= deadline {
 		return fmt.Errorf("invalid registration: too far in future, %+v", registration)
 	}
 
 	if currentRegistration != nil {
-		lastTimestamp := currentRegistration.Message.Timestamp
+		lastTimestamp := currentRegistration.Message.Timestamp.Unix()
 		if timestamp < lastTimestamp {
 			return fmt.Errorf("invalid registration: more recent successful registration, %+v", registration)
 		}
@@ -204,7 +204,7 @@ func (s *Server) validateRegistrationSignature(registration *types.SignedValidat
 }
 
 func (s *Server) validateRegistrationValidatorStatus(registration *types.SignedValidatorRegistration) error {
-	publicKey := registration.Message.Pubkey
+	publicKey := types.PublicKey(registration.Message.Pubkey)
 	status, err := s.consensusClient.GetValidatorStatus(&publicKey)
 	if err != nil {
 		return err
@@ -255,7 +255,8 @@ func (s *Server) handleRegisterValidator(w http.ResponseWriter, r *http.Request)
 	}
 
 	for _, registration := range registrations {
-		currentRegistration, err := store.GetLatestValidatorRegistration(ctx, s.store, &registration.Message.Pubkey)
+		publicKey := types.PublicKey(registration.Message.Pubkey)
+		currentRegistration, err := store.GetLatestValidatorRegistration(ctx, s.store, &publicKey)
 		if err != nil {
 			logger.Warnw("could not get registrations for validator", "error", err, "registration", registration)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -312,9 +313,26 @@ func (s *Server) handleAuctionTranscript(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 }
 
+func (s *Server) handleAlive(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	err := s.consensusClient.FetchGenesis(ctx)
+	if err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func (s *Server) Run(ctx context.Context) error {
 	logger := s.logger.Sugar()
-	host := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
+	host := fmt.Sprintf("%s:%d", s.appConf.Host, s.appConf.Port)
 	logger.Infof("API server listening on %s", host)
 
 	mux := http.NewServeMux()
@@ -322,6 +340,9 @@ func (s *Server) Run(ctx context.Context) error {
 	mux.HandleFunc(GetFaultEndpoint, get(s.handleFaultsRequest))
 	mux.HandleFunc(RegisterValidatorEndpoint, post(s.handleRegisterValidator))
 	mux.HandleFunc(PostAuctionTranscriptEndpoint, post(s.handleAuctionTranscript))
+	mux.HandleFunc(MetricsEndpoint, get(promhttp.Handler().ServeHTTP))
+	mux.HandleFunc(AliveEndpoint, get(s.handleAlive))
+	mux.HandleFunc(ReadyEndpoint, get(s.handleReady))
 	return http.ListenAndServe(host, mux)
 }
 

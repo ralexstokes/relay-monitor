@@ -3,17 +3,21 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
 
-	boostTypes "github.com/flashbots/go-boost-utils/types"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/ralexstokes/relay-monitor/pkg/metrics"
 	"github.com/ralexstokes/relay-monitor/pkg/types"
+	"go.uber.org/zap"
 )
 
 const clientTimeoutSec = 2
 
 type Client struct {
+	logger    *zap.SugaredLogger
 	endpoint  string
 	hostname  string
 	PublicKey types.PublicKey
@@ -28,7 +32,11 @@ func (c *Client) String() string {
 	return c.PublicKey.String()
 }
 
-func NewClient(endpoint string) (*Client, error) {
+func (c *Client) Endpoint() string {
+	return c.endpoint
+}
+
+func NewClient(endpoint string, logger *zap.SugaredLogger) (*Client, error) {
 	u, err := url.Parse(endpoint)
 	if err != nil {
 		return nil, err
@@ -51,6 +59,7 @@ func NewClient(endpoint string) (*Client, error) {
 		hostname:  hostname,
 		PublicKey: publicKey,
 		client:    client,
+		logger:    logger,
 	}, nil
 }
 
@@ -73,25 +82,45 @@ func (c *Client) GetStatus() error {
 }
 
 // GetBid implements the `getHeader` endpoint in the Builder API
-// A return value of `(nil, nil)` indicates the relay was reachable but had no bid for the given parameters
-func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.PublicKey) (*types.Bid, error) {
+func (c *Client) GetBid(slot types.Slot, parentHash types.Hash, publicKey types.PublicKey) (*types.Bid, uint64, error) {
+	t := prometheus.NewTimer(metrics.GetBid)
+	defer t.ObserveDuration()
+
 	bidUrl := c.endpoint + fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot, parentHash, publicKey)
 	req, err := http.NewRequest(http.MethodGet, bidUrl, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, &types.ClientError{Type: types.RelayError, Code: 500, Message: err.Error()}
 	}
+	start := time.Now()
 	resp, err := c.client.Do(req)
+	duration := time.Since(start).Milliseconds()
 	if err != nil {
-		return nil, err
+		return nil, 0, &types.ClientError{Type: types.RelayError, Code: 500, Message: err.Error()}
 	}
 	if resp.StatusCode == http.StatusNoContent {
-		return nil, nil
+		return nil, uint64(duration), nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get bid with HTTP status code %d", resp.StatusCode)
+		rspBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			c.logger.Debugw("failed to read response body", zap.Error(err))
+			return nil, uint64(duration), err
+		}
+
+		errorMsg := &types.ClientError{}
+		err = json.Unmarshal(rspBytes, errorMsg)
+		if err != nil {
+			c.logger.Debug("failed to unmarshal response body", "body", string(rspBytes), zap.Error(err))
+			return nil, uint64(duration), &types.ClientError{Type: types.RelayError, Code: resp.StatusCode, Message: "Unable to parse relay response"}
+		}
+
+		return nil, uint64(duration), &types.ClientError{Type: types.RelayError, Code: resp.StatusCode, Message: errorMsg.Message}
 	}
 
-	var bid boostTypes.GetHeaderResponse
+	var bid types.GetHeaderResponse
 	err = json.NewDecoder(resp.Body).Decode(&bid)
-	return bid.Data, err
+	if err != nil {
+		return bid, uint64(duration), &types.ClientError{Type: types.RelayError, Code: 500, Message: err.Error()}
+	}
+	return bid, uint64(duration), err
 }
